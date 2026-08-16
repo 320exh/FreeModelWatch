@@ -45,6 +45,10 @@ export function serializeModelView(m: ModelView) {
       dailyLimit: r.availability.dailyLimit,
       rateLimitRpm: r.availability.rateLimitRpm,
       requiresPaymentMethod: r.availability.requiresPaymentMethod,
+      paymentRequirement: r.availability.paymentRequirementKnown
+        ? (r.availability.requiresPaymentMethod ? "required" : "not_required")
+        : "unknown",
+      paymentRequirementKnown: r.availability.paymentRequirementKnown,
       requiresApiKey: r.availability.requiresApiKey,
       requiresSignup: r.availability.requiresSignup,
       apiFormat: r.availability.apiFormat,

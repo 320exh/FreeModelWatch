@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getModelViews, rankModels, getHarnessCompat, type ScoredModel } from "@/lib/queries";
+import { getModelViews, rankModels, getHarnessCompat, getAllHarnesses, type ScoredModel } from "@/lib/queries";
+import { recommendFreeAccess, type RecommendRequirements } from "@/lib/intelligence";
 import { AccessBadge, ConfidenceBadge, OpenBadge } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -15,10 +16,46 @@ function harnessModelIds(harnessId: string): Set<string> {
 
 const HIGHLIGHT = "#34d399";
 
-export default function BestPage() {
+const PRIORITIES = [
+  { v: "coding", label: "Coding" },
+  { v: "reasoning", label: "Reasoning" },
+  { v: "vision", label: "Vision" },
+  { v: "longContext", label: "Long context" },
+  { v: "general", label: "General" },
+];
+
+export default async function BestPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const sp = await searchParams;
+  const one = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : undefined);
+  const priority = (one("priority") as RecommendRequirements["priority"]) || "coding";
+  const prioritizeNoCard = one("noCard") === "1" || one("noCard") === "true";
+  const prioritizeNoSignup = one("noSignup") === "1" || one("noSignup") === "true";
+  const prioritizeNoApiKey = one("noApiKey") === "1" || one("noApiKey") === "true";
+  const openSourceOnly = one("openSource") === "1" || one("openSource") === "true";
+  const contextMin = one("contextMin") ? Number(one("contextMin")) : undefined;
+  const harness = one("harness") || undefined;
+
+  const reqs: RecommendRequirements = {
+    priority,
+    prioritizeNoCard,
+    prioritizeNoSignup,
+    prioritizeNoApiKey,
+    openSourceOnly,
+    contextMin: contextMin && Number.isFinite(contextMin) ? contextMin : undefined,
+    harness,
+    limit: 10,
+  };
+  const recommendations = recommendFreeAccess(reqs);
+
   const views = getModelViews().filter((m) => m.freeRouteCount > 0);
   const opencodeIds = harnessModelIds("opencode");
   const claudeCodeIds = harnessModelIds("claude-code");
+  const harnesses = getAllHarnesses();
+  const hasFilters = !!one("priority") || prioritizeNoCard || prioritizeNoSignup || prioritizeNoApiKey || openSourceOnly || !!contextMin || !!harness;
 
   const sections: {
     title: string;
@@ -43,6 +80,67 @@ export default function BestPage() {
           Rankings are <span className="text-[var(--fg)]">calculated</span>, not authoritative — a weighted score over capability, free quota, setup friction, verification confidence, context, and current status. Always check the linked source before relying on an entry.
         </p>
       </div>
+
+      {/* Recommendation engine (req 4) */}
+      <section className="card p-4 flex flex-col gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Find the right free model for your task 🎯</h2>
+          <p className="text-[12.5px] text-[var(--fg-dim)]">
+            Transparent ranking: each result explains <span className="text-[var(--fg)]">why it matched</span> your needs and{" "}
+            <span className="text-[var(--fg)]">why it ranks above the next option</span>. No black-box scores.
+          </p>
+        </div>
+        <form method="get" className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-[12px] text-[var(--fg-dim)]">I mostly need
+            <select name="priority" className="input" defaultValue={priority}>
+              {PRIORITIES.map((p) => <option key={p.v} value={p.v}>{p.label}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-[12px] text-[var(--fg-dim)]">Min context (tokens)
+            <input name="contextMin" className="input" placeholder="100000" defaultValue={contextMin ?? ""} />
+          </label>
+          <label className="flex flex-col gap-1 text-[12px] text-[var(--fg-dim)]">Works in harness
+            <select name="harness" className="input" defaultValue={harness ?? ""}>
+              <option value="">Any</option>
+              {harnesses.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" name="noCard" value="1" defaultChecked={prioritizeNoCard} /> No card</label>
+          <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" name="noSignup" value="1" defaultChecked={prioritizeNoSignup} /> No signup</label>
+          <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" name="noApiKey" value="1" defaultChecked={prioritizeNoApiKey} /> No API key</label>
+          <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" name="openSource" value="1" defaultChecked={openSourceOnly} /> Open source</label>
+          <button className="btn btn-primary" type="submit">Recommend</button>
+          {hasFilters && <Link href="/best" className="btn">Clear</Link>}
+        </form>
+
+        {hasFilters && (
+          <div className="card divide-y divide-[var(--border)] mt-1">
+            {recommendations.length === 0 ? (
+              <div className="p-4 text-[13px] text-[var(--fg-dim)]">No free route satisfies these requirements.</div>
+            ) : (
+              recommendations.map((rec, i) => (
+                <div key={rec.routeId} className="p-3 flex flex-col gap-2">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="w-6 text-center font-bold text-[var(--fg-mute)]">{i + 1}</span>
+                    <Link href={`/models/${rec.modelId}`} className="font-medium hover:underline">{rec.modelName}</Link>
+                    <span className="chip" style={{ color: "#60a5fa", borderColor: "#1d4e57", background: "#08222a" }}>{rec.providerName}</span>
+                    <AccessBadge type={rec.accessType} short />
+                    <span className="ml-auto chip font-bold" style={{ color: HIGHLIGHT, borderColor: "#1f5e47" }}>score {rec.matchScore}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {rec.matchReasons.map((r, j) => (
+                      <span key={j} className="chip" style={{ color: "#34d399", borderColor: "#1f5e47", background: "#0e1f18", fontSize: 11 }}>✓ {r}</span>
+                    ))}
+                  </div>
+                  {rec.rankReasons.length > 0 && (
+                    <div className="text-[11.5px] text-[var(--fg-dim)]">Why above the rest: {rec.rankReasons.join(" · ")}</div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </section>
 
       <div className="grid lg:grid-cols-2 gap-6">
         {sections.map((s) => (

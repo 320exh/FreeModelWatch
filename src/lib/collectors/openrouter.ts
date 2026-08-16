@@ -383,6 +383,7 @@ export interface NormalizedAvailabilityRow {
   monthlyLimit: number | null;
   requiresApiKey: boolean;
   requiresPaymentMethod: boolean;
+  paymentRequirementKnown: boolean;
   requiresSignup: boolean;
   expiresAt: string | null;
   sourceUrl: string | null;
@@ -470,9 +471,10 @@ export function normalizeModel(raw: OpenRouterModel, providerId: string = OPENRO
       rateLimitTpm: null,
       dailyLimit: null,
       monthlyLimit: null,
-      requiresApiKey: true,
-      requiresPaymentMethod: false,
-      requiresSignup: true,
+       requiresApiKey: true,
+       requiresPaymentMethod: false,
+       paymentRequirementKnown: false,
+       requiresSignup: true,
       expiresAt: raw.expiration_date ?? null,
       sourceUrl: `${OPENROUTER_MODELS_PAGE}/${encodeURIComponent(slug)}`,
       sourceType: "official_docs",

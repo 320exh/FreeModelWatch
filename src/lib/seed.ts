@@ -73,16 +73,16 @@ export function seedDatabase(): void {
     INSERT OR IGNORE INTO availability
     (id,model_id,provider_id,harness_id,access_type,free_quota_value,free_quota_unit,free_quota_period,
      rate_limit_rpm,rate_limit_tpm,daily_limit,monthly_limit,input_price_per_million,output_price_per_million,
-     currency,requires_api_key,requires_payment_method,requires_signup,geographic_restrictions,api_format,
+     currency,requires_api_key,requires_payment_method,payment_requirement_known,requires_signup,geographic_restrictions,api_format,
      custom_endpoint_url,status,is_active,source_url,source_title,source_type,last_verified_at,
      verification_method,verification_confidence,verification_notes,data_origin,expires_at,verified_by)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `);
    for (const a of AVAILABILITY as Availability[]) {
      insertAvail.run(
        a.id, a.modelId, a.providerId, a.harnessId ?? null, a.accessType, a.freeQuotaValue, a.freeQuotaUnit, a.freeQuotaPeriod,
        a.rateLimitRpm, a.rateLimitTpm, a.dailyLimit, a.monthlyLimit, a.inputPricePerMillion, a.outputPricePerMillion,
-       a.currency, bool(a.requiresApiKey), bool(a.requiresPaymentMethod), bool(a.requiresSignup), j(a.geographicRestrictions),
+       a.currency, bool(a.requiresApiKey), bool(a.requiresPaymentMethod), bool(a.paymentRequirementKnown), bool(a.requiresSignup), j(a.geographicRestrictions),
        a.apiFormat, a.customEndpointUrl, a.status, bool(a.isActive), a.sourceUrl, a.sourceTitle, a.sourceType,
        a.lastVerifiedAt, a.verificationMethod, a.verificationConfidence, a.verificationNotes, a.dataOrigin ?? "seed", a.expiresAt ?? null, null
      );

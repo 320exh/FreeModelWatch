@@ -17,6 +17,7 @@ type AvInput = {
   outputPrice?: number | null;
   requiresApiKey?: boolean;
   requiresPaymentMethod?: boolean;
+  paymentRequirementKnown?: boolean;
   requiresSignup?: boolean;
   apiFormat?: string | null;
   customEndpointUrl?: string | null;
@@ -50,6 +51,13 @@ function av(i: AvInput): Availability {
     currency: "USD",
     requiresApiKey: i.requiresApiKey ?? true,
     requiresPaymentMethod: i.requiresPaymentMethod ?? false,
+    // Evidence-based (req 9): the payment requirement is only "known" when the
+    // access type makes it self-evident (local/self-hosted needs no account) or
+    // it is explicitly supplied. Otherwise we treat it as UNKNOWN so the UI
+    // shows "Payment requirement unknown" rather than assuming "no card".
+    paymentRequirementKnown:
+      i.paymentRequirementKnown ??
+      (i.accessType === "free_local" && (i.requiresApiKey ?? false) === false && (i.requiresSignup ?? false) === false ? true : false),
     requiresSignup: i.requiresSignup ?? true,
     geographicRestrictions: [],
     apiFormat: i.apiFormat ?? null,
@@ -70,9 +78,9 @@ function av(i: AvInput): Availability {
 
 export const AVAILABILITY: Availability[] = [
   // ----- Google Gemini free tier -----
-  av({ modelId: "gemini-2.0-flash", providerId: "google", accessType: "free_tier", status: "available", dailyLimit: 1500, rateLimitRpm: 15, rateLimitTpm: 1000000, freeQuotaValue: 1500, freeQuotaUnit: "requests", freeQuotaPeriod: "day", requiresApiKey: true, requiresPaymentMethod: false, confidence: "verified", sourceUrl: "https://ai.google.dev/pricing", sourceTitle: "Gemini API Pricing", sourceType: "pricing_page" }),
-  av({ modelId: "gemini-2.0-flash-lite", providerId: "google", accessType: "free_tier", status: "available", dailyLimit: 1500, rateLimitRpm: 15, freeQuotaValue: 1500, freeQuotaUnit: "requests", freeQuotaPeriod: "day", requiresPaymentMethod: false, confidence: "verified", sourceUrl: "https://ai.google.dev/pricing", sourceTitle: "Gemini API Pricing", sourceType: "pricing_page" }),
-  av({ modelId: "gemini-2.5-flash", providerId: "google", accessType: "free_tier", status: "available", dailyLimit: 500, rateLimitRpm: 10, freeQuotaValue: 500, freeQuotaUnit: "requests", freeQuotaPeriod: "day", requiresPaymentMethod: false, confidence: "likely", sourceUrl: "https://ai.google.dev/pricing", sourceTitle: "Gemini API Pricing", sourceType: "pricing_page" }),
+  av({ modelId: "gemini-2.0-flash", providerId: "google", accessType: "free_tier", status: "available", dailyLimit: 1500, rateLimitRpm: 15, rateLimitTpm: 1000000, freeQuotaValue: 1500, freeQuotaUnit: "requests", freeQuotaPeriod: "day", requiresApiKey: true, requiresPaymentMethod: false, paymentRequirementKnown: true, confidence: "verified", sourceUrl: "https://ai.google.dev/pricing", sourceTitle: "Gemini API Pricing", sourceType: "pricing_page" }),
+  av({ modelId: "gemini-2.0-flash-lite", providerId: "google", accessType: "free_tier", status: "available", dailyLimit: 1500, rateLimitRpm: 15, freeQuotaValue: 1500, freeQuotaUnit: "requests", freeQuotaPeriod: "day", requiresPaymentMethod: false, paymentRequirementKnown: true, confidence: "verified", sourceUrl: "https://ai.google.dev/pricing", sourceTitle: "Gemini API Pricing", sourceType: "pricing_page" }),
+  av({ modelId: "gemini-2.5-flash", providerId: "google", accessType: "free_tier", status: "available", dailyLimit: 500, rateLimitRpm: 10, freeQuotaValue: 500, freeQuotaUnit: "requests", freeQuotaPeriod: "day", requiresPaymentMethod: false, paymentRequirementKnown: true, confidence: "likely", sourceUrl: "https://ai.google.dev/pricing", sourceTitle: "Gemini API Pricing", sourceType: "pricing_page" }),
 
   // ----- OpenAI free tier -----
   av({ modelId: "gpt-4o-mini", providerId: "openai", accessType: "free_with_limits", status: "limited", rateLimitRpm: 3, freeQuotaValue: 3, freeQuotaUnit: "requests", freeQuotaPeriod: "minute", requiresPaymentMethod: false, confidence: "likely", sourceUrl: "https://openai.com/api/pricing/", sourceTitle: "OpenAI API Pricing", sourceType: "pricing_page", notes: "Free tier heavily throttled; treat as best-effort." }),

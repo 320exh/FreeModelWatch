@@ -1,4 +1,5 @@
 import { getVerificationQueue, detectContradictions, getAllModels, getAllProviders, getStaleCount, getLastCollectorRuns, type QueueSeverity, type CollectorRunRow } from "@/lib/queries";
+import { getDataQualityStats } from "@/lib/intelligence";
 import { markVerified, adminVerifyRoute, addAvailability, reportChange } from "@/lib/actions";
 import { AccessBadge, ConfidenceBadge, FreshnessBadge } from "@/components/ui";
 import CollectorRunner from "@/components/CollectorRunner";
@@ -38,6 +39,7 @@ export default async function AdminPage({
   const issues = detectContradictions();
   const stale = getStaleCount();
   const runs = getLastCollectorRuns(10);
+  const dq = getDataQualityStats();
 
   const sevCounts = {
     critical: issues.filter((i) => i.severity === "critical").length,
@@ -135,6 +137,7 @@ export default async function AdminPage({
                     <input name="expiresAt" className="input" placeholder="YYYY-MM-DD" />
                   </label>
                   <label className="flex items-center gap-2 text-[13px] col-span-2"><input type="checkbox" name="requiresPaymentMethod" /> Requires payment method</label>
+                  <label className="flex items-center gap-2 text-[13px] col-span-2"><input type="checkbox" name="paymentRequirementKnown" /> Payment requirement is evidenced (uncheck = unknown, shown as &ldquo;unknown&rdquo; not &ldquo;no card&rdquo;)</label>
                   <label className="flex flex-col gap-1 text-[12px] text-[var(--fg-dim)] col-span-2">Source URL
                     <input name="sourceUrl" className="input" placeholder="https://…" />
                   </label>
@@ -179,6 +182,40 @@ export default async function AdminPage({
         )}
         <div className="text-[12px] text-[var(--fg-mute)]">
           Critical {sevCounts.critical} · Warning {sevCounts.warning} · Info {sevCounts.info}
+        </div>
+      </section>
+
+      {/* Data quality (transparency) */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-semibold">Data Quality · Transparency</h2>
+        <p className="text-[13px] text-[var(--fg-dim)]">
+          Per the evidence rule, &ldquo;unknown&rdquo; payment requirements must never render as &ldquo;no card&rdquo;. This panel shows coverage so gaps are visible.
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="card p-4"><div className="text-2xl font-bold">{dq.totalFreeRoutes}</div><div className="text-[12.5px] text-[var(--fg-dim)]">Free routes</div></div>
+          <div className="card p-4"><div className="text-2xl font-bold text-[#34d399]">{dq.paymentRequirementKnown}</div><div className="text-[12.5px] text-[var(--fg-dim)]">Payment requirement known</div></div>
+          <div className="card p-4"><div className="text-2xl font-bold text-[#fbbf24]">{dq.paymentRequirementUnknown}</div><div className="text-[12.5px] text-[var(--fg-dim)]">Payment requirement UNKNOWN</div></div>
+          <div className="card p-4"><div className="text-2xl font-bold text-[#60a5fa]">{dq.coveragePct}%</div><div className="text-[12.5px] text-[var(--fg-dim)]">Payment req. coverage</div></div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <div className="card p-4">
+            <div className="text-[12.5px] text-[var(--fg-dim)] mb-1">Freshness breakdown</div>
+            {dq.byFreshness.map((f) => (
+              <div key={f.tier} className="flex items-center justify-between text-[13px]"><span>{f.label}</span><span className="text-[var(--fg-mute)]">{f.count}</span></div>
+            ))}
+          </div>
+          <div className="card p-4 md:col-span-2">
+            <div className="text-[12.5px] text-[var(--fg-dim)] mb-1">Providers with unknown payment requirement</div>
+            {dq.unknownByProvider.length === 0 ? (
+              <div className="text-[13px] text-[var(--fg-dim)]">None — every free route has a known payment requirement. ✅</div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {dq.unknownByProvider.map((p) => (
+                  <span key={p.providerId} className="chip" style={{ color: "#fbbf24", borderColor: "#5e4d18", background: "#1f1a08" }}>{p.providerName}: {p.unknownCount}</span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
@@ -270,6 +307,7 @@ export default async function AdminPage({
               <input name="freeQuotaPeriod" className="input" placeholder="day / month / once" />
             </label>
             <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" name="requiresPaymentMethod" /> Requires payment method</label>
+            <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" name="paymentRequirementKnown" checked /> Payment requirement evidenced</label>
             <label className="flex flex-col gap-1 text-[12px] text-[var(--fg-dim)]">Source URL
               <input name="sourceUrl" className="input" placeholder="https://…" />
             </label>

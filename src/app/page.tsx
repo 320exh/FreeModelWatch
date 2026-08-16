@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { getDashboardStats, getModelViews, rankModels } from "@/lib/queries";
+import { getDashboardStats, getModelViews, rankModels, getModel } from "@/lib/queries";
+import { getNewlyFree, getRecentlyRemoved } from "@/lib/intelligence";
 import { ModelCard } from "@/components/ModelCard";
 import { AccessBadge, ConfidenceBadge, StatusIcon } from "@/components/ui";
 import { daysAgo } from "@/lib/format";
@@ -28,6 +29,8 @@ export default function DashboardPage() {
   const stats = getDashboardStats();
   const views = getModelViews().filter((m) => m.freeRouteCount > 0);
   const bestCoding = rankModels(views, (m) => (m.codingCapability ?? 0) >= 4).slice(0, 6);
+  const newlyFree = getNewlyFree(30);
+  const recentlyRemoved = getRecentlyRemoved(30);
 
   return (
     <div className="flex flex-col gap-8">
@@ -45,6 +48,58 @@ export default function DashboardPage() {
         <Stat value={stats.harnessFreeModels} label="Models free in harnesses" href="/harnesses" />
         <Stat value={stats.totalHarnesses} label="Coding harnesses" href="/harnesses" />
         <Stat value={stats.staleCount} label="Entries needing verify" sub="30+ days old" href="/admin" />
+      </section>
+
+      <section className="grid lg:grid-cols-2 gap-6">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold">🆕 Newly free (last 30 days)</h2>
+            <Link href="/changes?cat=newly_free" className="text-[12px] text-[var(--accent)] hover:underline">all →</Link>
+          </div>
+          <div className="card divide-y divide-[var(--border)]">
+            {newlyFree.length === 0 ? (
+              <div className="p-4 text-[13px] text-[var(--fg-dim)]">No models became free recently.</div>
+            ) : (
+              newlyFree.slice(0, 8).map((t) => {
+                const model = getModel(t.modelId);
+                return (
+                  <Link key={t.id} href={`/models/${t.modelId}`} className="block p-3 hover:bg-[var(--bg-elev2)]">
+                    <div className="flex items-center gap-2 text-[13.5px]">
+                      <span className="font-semibold">{model?.name ?? t.modelId}</span>
+                      <span className="text-[var(--fg-mute)] ml-auto text-[11px]">{daysAgo(t.detectedAt)}</span>
+                    </div>
+                    <div className="text-[12px] text-[var(--fg-dim)] mt-0.5">{t.notes ?? "New free route detected."}</div>
+                  </Link>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold">🔴 Recently removed (last 30 days)</h2>
+            <Link href="/changes?cat=removed" className="text-[12px] text-[var(--accent)] hover:underline">all →</Link>
+          </div>
+          <div className="card divide-y divide-[var(--border)]">
+            {recentlyRemoved.length === 0 ? (
+              <div className="p-4 text-[13px] text-[var(--fg-dim)]">No models were removed recently.</div>
+            ) : (
+              recentlyRemoved.slice(0, 8).map((t) => {
+                const model = getModel(t.modelId);
+                return (
+                  <Link key={t.id} href={`/models/${t.modelId}`} className="block p-3 hover:bg-[var(--bg-elev2)]">
+                    <div className="flex items-center gap-2 text-[13.5px]">
+                      <span className="font-semibold">{model?.name ?? t.modelId}</span>
+                      <span className="text-[var(--fg-mute)] ml-auto text-[11px]">{daysAgo(t.detectedAt)}</span>
+                    </div>
+                    <div className="text-[12px] text-[var(--fg-dim)] mt-0.5">{t.notes ?? "Free route removed."}</div>
+                  </Link>
+                );
+              })
+            )}
+          </div>
+        </div>
       </section>
 
       {stats.alerts.length > 0 && (

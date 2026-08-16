@@ -175,6 +175,7 @@ export async function adminVerifyRoute(formData: FormData | Record<string, any>)
   const accessType = str(fields["accessType"]) || row.access_type;
   const confidence = str(fields["confidence"]) || "verified";
   const requiresPaymentMethod = bool(fields["requiresPaymentMethod"]);
+  const paymentRequirementKnown = fields["paymentRequirementKnown"] !== undefined ? bool(fields["paymentRequirementKnown"]) : (requiresPaymentMethod ? true : row.payment_requirement_known === 1);
   const freeQuotaValue = num(fields["freeQuotaValue"]);
   const freeQuotaUnit = str(fields["freeQuotaUnit"]) || null;
   const freeQuotaPeriod = str(fields["freeQuotaPeriod"]) || null;
@@ -188,18 +189,19 @@ export async function adminVerifyRoute(formData: FormData | Record<string, any>)
   if (accessType !== row.access_type) changes.push(`access: ${row.access_type} -> ${accessType}`);
   if (confidence !== row.verification_confidence) changes.push(`confidence: ${row.verification_confidence} -> ${confidence}`);
   if (requiresPaymentMethod !== !!row.requires_payment_method) changes.push(`card: ${!!row.requires_payment_method} -> ${requiresPaymentMethod}`);
+  if (paymentRequirementKnown !== (row.payment_requirement_known === 1)) changes.push(`cardKnown: ${!!row.payment_requirement_known} -> ${paymentRequirementKnown}`);
 
   db.prepare(
     `UPDATE availability
-     SET status = ?, access_type = ?, verification_confidence = ?, requires_payment_method = ?,
-         free_quota_value = ?, free_quota_unit = ?, free_quota_period = ?, source_url = ?,
-         source_title = ?, verification_notes = ?, expires_at = ?, last_verified_at = ?,
-         verification_method = 'manual', data_origin = 'production', verified_by = ?
-     WHERE id = ?`
-  ).run(
-    status, accessType, confidence, requiresPaymentMethod ? 1 : 0, freeQuotaValue, freeQuotaUnit, freeQuotaPeriod,
-    sourceUrl || null, sourceTitle || null, notes || null, expiresAt || null, today(), verifiedBy, availabilityId
-  );
+      SET status = ?, access_type = ?, verification_confidence = ?, requires_payment_method = ?, payment_requirement_known = ?,
+          free_quota_value = ?, free_quota_unit = ?, free_quota_period = ?, source_url = ?,
+          source_title = ?, verification_notes = ?, expires_at = ?, last_verified_at = ?,
+          verification_method = 'manual', data_origin = 'production', verified_by = ?
+      WHERE id = ?`
+    ).run(
+      status, accessType, confidence, requiresPaymentMethod ? 1 : 0, paymentRequirementKnown ? 1 : 0, freeQuotaValue, freeQuotaUnit, freeQuotaPeriod,
+      sourceUrl || null, sourceTitle || null, notes || null, expiresAt || null, today(), verifiedBy, availabilityId
+    );
 
   // Link any newly supplied source URL as a source for this availability.
   if (sourceUrl) {
@@ -252,6 +254,7 @@ export async function addAvailability(formData: FormData | Record<string, any>) 
   const freeQuotaUnit = str(fields["freeQuotaUnit"]) || null;
   const freeQuotaPeriod = str(fields["freeQuotaPeriod"]) || null;
   const requiresPaymentMethod = bool(fields["requiresPaymentMethod"]);
+  const paymentRequirementKnown = fields["paymentRequirementKnown"] !== undefined ? bool(fields["paymentRequirementKnown"]) : requiresPaymentMethod;
   const sourceUrl = str(fields["sourceUrl"]) || null;
   const verifiedBy = str(fields["verifiedBy"]) || null;
   const id = `${modelId}__${providerId}`;
@@ -259,10 +262,10 @@ export async function addAvailability(formData: FormData | Record<string, any>) 
   db.prepare(
     `INSERT OR IGNORE INTO availability
      (id, model_id, provider_id, harness_id, access_type, free_quota_value, free_quota_unit, free_quota_period,
-      requires_payment_method, requires_api_key, requires_signup, status, is_active, source_url, last_verified_at,
+      requires_payment_method, payment_requirement_known, requires_api_key, requires_signup, status, is_active, source_url, last_verified_at,
       verification_method, verification_confidence, data_origin)
-     VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, 1, 1, ?, 1, ?, ?, 'manual', 'likely', 'production')`
-  ).run(id, modelId, providerId, accessType, freeQuotaValue, freeQuotaUnit, freeQuotaPeriod, requiresPaymentMethod ? 1 : 0, status, sourceUrl || null, today());
+     VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1, 1, ?, 1, ?, ?, 'manual', 'likely', 'production')`
+  ).run(id, modelId, providerId, accessType, freeQuotaValue, freeQuotaUnit, freeQuotaPeriod, requiresPaymentMethod ? 1 : 0, paymentRequirementKnown ? 1 : 0, status, sourceUrl || null, today());
 
   recordChange({
     entityType: "availability",

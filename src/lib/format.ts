@@ -19,11 +19,11 @@ export const ACCESS_WHY: Record<AccessType, string> = {
   free_tier: "Provider's recurring free usage tier (rate/quota limited).",
   free_credits: "One-time sign-up credits you can spend on any model.",
   free_with_limits: "Free but heavily throttled (low RPM / tiny quota).",
-  free_through_aggregator: "Free via an aggregator (e.g. OpenRouter) that hosts the model.",
+  free_through_aggregator: "Free via an aggregator (e.g. OpenRouter) with zero-cost inference pricing. Payment method requirements vary by aggregator policy.",
   free_through_harness: "Free because the coding harness routes to a free endpoint.",
   free_local: "Open weights you run locally — fully free, no API bill.",
   temporarily_free: "Promotional / time-limited free access; may expire.",
-  community_unofficial: "Community-shared or unofficial access; verify before relying.",
+  community_unofficial: "Community-shared or unofficial access; verify before relying on.",
   direct_api: "Direct provider free tier (e.g. Google AI Studio / Gemini API) — free inference from the vendor itself, not an aggregator.",
 };
 
@@ -48,6 +48,34 @@ export const FRESHNESS_LABELS: Record<FreshnessTier, string> = {
   stale: "Stale",
   expired: "Expired",
   unavailable: "Unavailable",
+};
+
+// 5-tier freshness language required by the product spec (req 6). The internal
+// 7-tier classification is collapsed into these for user-facing trust signals.
+export const FRESHNESS_EMOJI: Record<FreshnessTier, string> = {
+  live_verified: "🟢",
+  likely: "🟡",
+  unverified: "⚪",
+  seed_demo: "⚪",
+  stale: "🟠",
+  expired: "🔴",
+  unavailable: "🔴",
+};
+
+export const FRESHNESS_EMOJI_LABEL: Record<FreshnessTier, string> = {
+  live_verified: "🟢 Recently verified",
+  likely: "🟡 Likely current",
+  unverified: "⚪ Unknown",
+  seed_demo: "⚪ Unknown",
+  stale: "🟠 Stale",
+  expired: "🔴 Expired / unavailable",
+  unavailable: "🔴 Expired / unavailable",
+};
+
+export const PAYMENT_LABELS: Record<"required" | "not_required" | "unknown", string> = {
+  required: "Required",
+  not_required: "No card required",
+  unknown: "Payment requirement unknown",
 };
 
 export const FRESHNESS_COLORS: Record<FreshnessTier, { color: string; bg: string; border: string }> = {

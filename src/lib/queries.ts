@@ -104,6 +104,7 @@ function rowToAvailability(r: any): Availability {
     currency: r.currency,
     requiresApiKey: !!r.requires_api_key,
     requiresPaymentMethod: !!r.requires_payment_method,
+    paymentRequirementKnown: !!r.payment_requirement_known,
     requiresSignup: !!r.requires_signup,
     geographicRestrictions: parseArr(r.geographic_restrictions),
     apiFormat: r.api_format,
@@ -374,11 +375,12 @@ export interface Graph {
   sourcesByAvail: Map<string, Source[]>;
 }
 
-function loadGraph(): Graph {
+export function loadGraph(includeHistorical = false): Graph {
   const db = getDb();
   const models = (db.prepare("SELECT * FROM models").all() as any[]).map(rowToModel);
   const providers = (db.prepare("SELECT * FROM providers").all() as any[]).map(rowToProvider);
-  const avail = (db.prepare("SELECT * FROM availability WHERE is_active = 1").all() as any[]).map(rowToAvailability);
+  const allAvail = (db.prepare("SELECT * FROM availability").all() as any[]).map(rowToAvailability);
+  const avail = includeHistorical ? allAvail : allAvail.filter((a) => a.isActive);
   const hc = (db.prepare("SELECT * FROM model_harness_compatibility").all() as any[]).map(rowToHc);
   const links = (db.prepare(`
     SELECT aus.availability_id, s.* FROM availability_sources aus
@@ -440,7 +442,9 @@ function enrichModel(m: Model, g: Graph): ModelView {
     if (score(r) > score(best)) best = r;
   }
 
-  const noPaymentMethod = routes.length > 0 && routes.every((r) => !r.availability.requiresPaymentMethod);
+  // Evidence-based: "no card" is only true when the requirement is *known* to be
+  // absent. An unknown payment requirement is NEVER treated as "no card". (req 9)
+  const noPaymentMethod = routes.length > 0 && routes.every((r) => r.availability.paymentRequirementKnown && !r.availability.requiresPaymentMethod);
   const noCreditCard = noPaymentMethod;
   const lowFriction = routes.length > 0 && routes.some((r) => !r.availability.requiresPaymentMethod && !r.availability.requiresSignup);
 

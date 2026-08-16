@@ -55,6 +55,8 @@ export interface NormalizedAvailability extends RawPricing {
   accessType: AccessType;
   status: AvailabilityStatus;
   confidence: VerificationConfidence;
+  /** Whether the payment requirement is evidenced (req 9). Defaults to false. */
+  paymentRequirementKnown?: boolean;
 }
 
 export interface CollectorResult {

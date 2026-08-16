@@ -29,6 +29,11 @@ export type ProviderCategory =
 
 export type VerificationConfidence = "verified" | "likely" | "unverified" | "stale";
 
+// Tri-state for payment requirement (req 9 / 18). Critically: the ABSENCE of a
+// payment requirement must NOT be read as "no card required" unless a source
+// actually supports that claim. `unknown` means exactly that — we don't know.
+export type PaymentRequirement = "required" | "not_required" | "unknown";
+
 // Where a row came from. Seed/demo data is NOT the same as verified production data.
 // `live_collector` marks rows written by an automated provider collector (e.g. OpenRouter).
 // They are NOT human-verified unless a later admin verification sets them to `production`.
@@ -131,6 +136,9 @@ export interface Availability {
   currency: string;
   requiresApiKey: boolean;
   requiresPaymentMethod: boolean;
+  // Whether the payment requirement is *evidenced*. When false, the boolean
+  // above is treated as unknown — never as "no card required".
+  paymentRequirementKnown: boolean;
   requiresSignup: boolean;
   geographicRestrictions: string[];
   apiFormat: string | null;

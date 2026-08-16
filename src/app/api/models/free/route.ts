@@ -12,6 +12,32 @@ const KNOWN_ACCESS: AccessType[] = [
 ];
 const KNOWN_CONF: VerificationConfidence[] = ["verified", "likely", "unverified", "stale"];
 
+// Convenience aliases (req 17) so callers can use short/intuitive tokens.
+const ACCESS_ALIASES: Record<string, AccessType> = {
+  aggregator: "free_through_aggregator",
+  agg: "free_through_aggregator",
+  openrouter: "free_through_aggregator",
+  harness: "free_through_harness",
+  local: "free_local",
+  self_hosted: "free_local",
+  direct: "direct_api",
+  direct_api: "direct_api",
+  credits: "free_credits",
+  community: "community_unofficial",
+  promo: "temporarily_free",
+};
+
+function expandAccessAliases(raw: string | null): AccessType[] | undefined {
+  if (!raw) return undefined;
+  const out = new Set<AccessType>();
+  for (const token of raw.split(",").map((s) => s.trim()).filter(Boolean)) {
+    const lower = token.toLowerCase();
+    if ((KNOWN_ACCESS as string[]).includes(lower)) out.add(lower as AccessType);
+    else if (ACCESS_ALIASES[lower]) out.add(ACCESS_ALIASES[lower]);
+  }
+  return out.size ? [...out] : undefined;
+}
+
 function csv<T extends string>(v: string | null, allowed: T[]): T[] | undefined {
   if (!v) return undefined;
   const parts = v.split(",").map((s) => s.trim()).filter(Boolean) as T[];
@@ -42,7 +68,7 @@ export function GET(req: Request) {
 
     const filters: ModelFilters = {
       q: p.get("q")?.trim() || undefined,
-      access: csv<AccessType>(p.get("access"), KNOWN_ACCESS),
+      access: expandAccessAliases(p.get("access")),
       verified: csv<VerificationConfidence>(p.get("verified"), KNOWN_CONF),
       coding: boolParam(p.get("coding")) ?? false,
       reasoning: boolParam(p.get("reasoning")) ?? false,
