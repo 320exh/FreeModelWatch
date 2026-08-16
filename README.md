@@ -1,8 +1,8 @@
 # FreeModelWatch
 
 A tracker for which AI models are available for **free** — across direct provider APIs,
-aggregators (OpenRouter, OpenRouter-like), cloud credits, local/hosted OSS, and coding
-harnesses (Claude Code, Cline, etc.). It emphasizes **verified, fresh data** with transparent
+aggregators, cloud credits, local/hosted OSS, and coding
+harnesses. It emphasizes **verified, fresh data** with transparent
 rankings and a clear separation between demo/seed data and live-confirmed data.
 
 ## Stack
