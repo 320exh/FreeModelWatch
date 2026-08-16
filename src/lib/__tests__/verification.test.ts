@@ -1,7 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { getFreeModels, getModelView, getVerificationHistory, getStaleCount, classifyFreshness } from "@/lib/queries";
-import { adminVerifyRoute } from "@/lib/actions";
 import { getDb } from "@/lib/db";
+
+// Mock next/headers to provide a valid auth header for requireAdmin()
+vi.mock("next/headers", () => ({
+  headers: () => new Map([["authorization", "Basic YWRtaW46dGVzdC1wYXNzd29yZA=="]]), // admin:test-password
+}));
+
+import { adminVerifyRoute } from "@/lib/actions";
 
 describe("verification + history", () => {
   it("seed data is flagged seed_demo and never counted as stale", () => {
@@ -18,7 +24,7 @@ describe("verification + history", () => {
     } as never)).toBe("stale");
   });
 
-  it("adminVerifyRoute appends an immutable verification history entry", async () => {
+  it("adminVerifyRoute appends an immutable verification history entry with authenticated verified_by", async () => {
     const model = getFreeModels()[0];
     const view = getModelView(model.id)!;
     const route = view.routes[0];
@@ -29,7 +35,7 @@ describe("verification + history", () => {
       status: "degraded",
       accessType: route.availability.accessType,
       confidence: "verified",
-      verifiedBy: "tester",
+      // verifiedBy should come from auth, not from form field
       notes: "automated test verification",
     });
 
@@ -37,7 +43,7 @@ describe("verification + history", () => {
     expect(after.length).toBe(before + 1);
     const latest = after[after.length - 1];
     expect(latest.newStatus).toBe("degraded");
-    expect(latest.verifiedBy).toBe("tester");
+    expect(latest.verifiedBy).toBe("admin"); // from mocked auth header
     expect(latest.previousStatus).not.toBe(latest.newStatus);
   });
 

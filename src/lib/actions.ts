@@ -1,12 +1,23 @@
 "use server";
 
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { getDb } from "./db";
 import { getAvailability } from "./queries";
 import { runOpenRouterCollector, runGeminiCollector, type CollectorRunReport } from "./collectors/run";
+import { verifyBasicAuth } from "./auth";
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+async function requireAdmin(): Promise<string> {
+  const authHeader = (await headers()).get("authorization");
+  const username = await verifyBasicAuth(authHeader);
+  if (!username) {
+    throw new Error("UNAUTHORIZED");
+  }
+  return username;
 }
 
 function uid(prefix: string): string {
@@ -116,10 +127,10 @@ function appendVerificationHistory(params: {
 }
 
 export async function markVerified(formData: FormData | Record<string, any>) {
+  const verifiedBy = await requireAdmin();
   const fields = toFields(formData);
   const availabilityId = str(fields["id"]);
   if (!availabilityId) return;
-  const verifiedBy = str(fields["verifiedBy"]) || null;
   const db = getDb();
   const row = db.prepare("SELECT * FROM availability WHERE id = ?").get(availabilityId) as any;
   if (!row) return;
@@ -163,6 +174,7 @@ export async function markVerified(formData: FormData | Record<string, any>) {
 
 // Full admin verification of a single availability route: status, limits, confidence, source, notes.
 export async function adminVerifyRoute(formData: FormData | Record<string, any>) {
+  const verifiedBy = await requireAdmin();
   const fields = toFields(formData);
   const availabilityId = str(fields["id"]);
   if (!availabilityId) return { error: "Missing availability id" };
@@ -170,7 +182,6 @@ export async function adminVerifyRoute(formData: FormData | Record<string, any>)
   const row = db.prepare("SELECT * FROM availability WHERE id = ?").get(availabilityId) as any;
   if (!row) return { error: "Availability not found" };
 
-  const verifiedBy = str(fields["verifiedBy"]) || null;
   const status = str(fields["status"]) || row.status;
   const accessType = str(fields["accessType"]) || row.access_type;
   const confidence = str(fields["confidence"]) || "verified";
@@ -244,6 +255,7 @@ export async function adminVerifyRoute(formData: FormData | Record<string, any>)
 }
 
 export async function addAvailability(formData: FormData | Record<string, any>) {
+  const verifiedBy = await requireAdmin();
   const fields = toFields(formData);
   const modelId = str(fields["modelId"]);
   const providerId = str(fields["providerId"]);
@@ -256,16 +268,15 @@ export async function addAvailability(formData: FormData | Record<string, any>) 
   const requiresPaymentMethod = bool(fields["requiresPaymentMethod"]);
   const paymentRequirementKnown = fields["paymentRequirementKnown"] !== undefined ? bool(fields["paymentRequirementKnown"]) : requiresPaymentMethod;
   const sourceUrl = str(fields["sourceUrl"]) || null;
-  const verifiedBy = str(fields["verifiedBy"]) || null;
   const id = `${modelId}__${providerId}`;
   const db = getDb();
   db.prepare(
     `INSERT OR IGNORE INTO availability
      (id, model_id, provider_id, harness_id, access_type, free_quota_value, free_quota_unit, free_quota_period,
-      requires_payment_method, payment_requirement_known, requires_api_key, requires_signup, status, is_active, source_url, last_verified_at,
-      verification_method, verification_confidence, data_origin)
-     VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1, 1, ?, 1, ?, ?, 'manual', 'likely', 'production')`
-  ).run(id, modelId, providerId, accessType, freeQuotaValue, freeQuotaUnit, freeQuotaPeriod, requiresPaymentMethod ? 1 : 0, paymentRequirementKnown ? 1 : 0, status, sourceUrl || null, today());
+       requires_payment_method, payment_requirement_known, requires_api_key, requires_signup, status, is_active, source_url, last_verified_at,
+       verification_method, verification_confidence, data_origin, verified_by)
+     VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1, 1, ?, 1, ?, ?, 'manual', 'likely', 'production', ?)`
+  ).run(id, modelId, providerId, accessType, freeQuotaValue, freeQuotaUnit, freeQuotaPeriod, requiresPaymentMethod ? 1 : 0, paymentRequirementKnown ? 1 : 0, status, sourceUrl || null, today(), verifiedBy);
 
   recordChange({
     entityType: "availability",
@@ -284,6 +295,7 @@ export async function addAvailability(formData: FormData | Record<string, any>) 
 }
 
 export async function reportChange(formData: FormData | Record<string, any>) {
+  const verifiedBy = await requireAdmin();
   const fields = toFields(formData);
   const entityType = str(fields["entityType"]) || "availability";
   const entityId = str(fields["entityId"]);
@@ -308,6 +320,7 @@ export async function reportChange(formData: FormData | Record<string, any>) {
     newValue,
     changeSource: "user_report",
     sourceUrl,
+    verifiedBy,
     notes,
   });
   safeRevalidate("/admin");
@@ -317,14 +330,13 @@ export async function reportChange(formData: FormData | Record<string, any>) {
 // ---------------------------------------------------------------------------
 // Admin: run the OpenRouter live collector.
 //
-// SECURITY NOTE: This is an administrative mutation. There is no auth yet
-// (see CONTRIBUTING.md). Before production, gate these actions behind
-// `requireAdmin()` like every other mutating action. They write with
-// `data_origin = 'live_collector'` and never overwrite manually-verified
-// (`production`) rows with unverified data.
+// This action is protected by requireAdmin(). CLI collector execution
+// (npm run collect:openrouter / collect:gemini) bypasses this action entirely
+// and calls runOpenRouterCollector / runGeminiCollector directly.
 // ---------------------------------------------------------------------------
 
 export async function adminRunCollector(formData: FormData | Record<string, any>): Promise<{ ok: boolean; report?: CollectorRunReport; error?: string }> {
+  await requireAdmin();
   const fields = toFields(formData);
   const collectorId = str(fields["collectorId"]) || "openrouter";
   const dryRun = bool(fields["dryRun"]);

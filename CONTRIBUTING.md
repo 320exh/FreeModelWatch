@@ -54,19 +54,24 @@ Add new columns via the `MIGRATIONS` array in `src/lib/db.ts` (idempotent `ALTER
 Never drop/recreate the database in a migration — existing deployments must upgrade in place.
 Backfill defaults in `createConnection()` if needed.
 
-## ADMIN_SECURITY (must do before deploy)
+## ADMIN_SECURITY
 
-`/admin` and the mutating server actions (`adminVerifyRoute`, `markVerified`,
-`addAvailability`, `reportChange`) are **unauthenticated**. The codebase documents this in
-`src/lib/actions.ts` and `DATA_VERIFICATION.md`. To ship safely:
+Authentication is implemented via **HTTP Basic Auth** (see `src/lib/auth.ts`, `src/middleware.ts`).
+Required environment variables:
 
-1. Add an auth check (e.g. `requireAdmin()`) at the top of each mutating action.
-2. Derive `verified_by` from the session instead of the form field.
-3. Lock down `/admin` (redirect/403 when unauthenticated).
-4. Add CSRF protection to the forms and basic rate limiting.
+- `ADMIN_USERNAME` (default: `admin`)
+- `ADMIN_PASSWORD_HASH` (scrypt hash, generate with the script in README.md)
 
-The `verified_by` column already exists on `availability`, `change_history`, and
-`verification_history`, so no schema change is needed.
+Protected surfaces:
+- `/admin` and `/admin/*` — middleware enforces Basic Auth
+- All mutating server actions in `actions.ts` — each calls `requireAdmin()` at entry
+- `POST /api/admin/collect/openrouter` and `POST /api/admin/collect/gemini` — explicit auth check
+- `GET /api/admin/collect/*` — read-only, no auth required
+
+The authenticated username is written to `verified_by` on all mutations.
+Collector identities (`collector:openrouter`, `collector:gemini`) are preserved for automated CLI runs.
+
+CLI collector execution (`npm run collect:openrouter`, `npm run collect:gemini`) bypasses HTTP auth.
 
 ## Tests
 

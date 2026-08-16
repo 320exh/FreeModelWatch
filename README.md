@@ -79,7 +79,34 @@ src/app/
 
 ## Admin security (read this before deploying)
 
-`/admin` and all mutating server actions are **open by default** — there is no authentication
-yet. Do **not** deploy without gating `src/lib/actions.ts` behind real auth (see the
-`ADMIN_SECURITY` note in `CONTRIBUTING.md`). The schema already records a `verified_by`
-actor, so adding auth requires no data-model changes.
+Authentication is implemented via **HTTP Basic Auth** with a single admin identity.
+Before deploying, you **must** set the following environment variables:
+
+```bash
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD_HASH=salt:derived_key_hex
+```
+
+Generate a password hash:
+
+```bash
+node -e "
+const { scrypt, randomBytes } = require('crypto');
+const { promisify } = require('util');
+const scryptAsync = promisify(scrypt);
+const salt = randomBytes(16).toString('hex');
+const password = 'your-strong-password';
+(async () => {
+  const dk = await scryptAsync(password, salt, 64);
+  console.log(salt + ':' + dk.toString('hex'));
+})();
+"
+```
+
+- `/admin` and all `/admin/*` routes are protected by middleware.
+- All mutating server actions (`markVerified`, `adminVerifyRoute`, `addAvailability`, `reportChange`, `adminRunCollector`) independently verify credentials via `requireAdmin()`.
+- `POST /api/admin/collect/openrouter` and `POST /api/admin/collect/gemini` require authentication.
+- `GET /api/admin/collect/*` (read-only status) remain accessible.
+- CLI collector execution (`npm run collect:openrouter`, `npm run collect:gemini`) bypasses HTTP auth and works directly.
+- The authenticated username becomes `verified_by` on all mutations; collector identities (`collector:openrouter`, `collector:gemini`) are preserved for automated runs.
+- **Never deploy without HTTPS** — Basic Auth sends credentials on every request.

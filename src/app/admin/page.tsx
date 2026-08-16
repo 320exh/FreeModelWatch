@@ -52,11 +52,9 @@ export default async function AdminPage({
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-bold tracking-tight">Admin · Data Management</h1>
         <p className="text-[var(--fg-dim)] text-[13.5px]">Maintain the database, verify freshness, and review the moderation queue.</p>
-        <div className="card p-3 text-[12.5px] text-[#fbbf24] border" style={{ borderColor: "#5e4d18", background: "#1f1a08" }}>
-          <strong>Security note:</strong> This admin area is <strong>open by default</strong> — there is no authentication yet.
-          Mutating server actions are not protected. Before any production deployment, gate every action behind real auth
-          (see CONTRIBUTING.md / DATA_VERIFICATION.md). The schema already records a <code className="mono">verifiedBy</code> actor,
-          so adding auth requires no data-model changes.
+        <div className="card p-3 text-[12.5px] text-[#34d399] border" style={{ borderColor: "#1e5a2e", background: "#0c1f12" }}>
+          <strong>Auth enabled:</strong> This admin area is protected by HTTP Basic Auth (see <code className="mono">ADMIN_USERNAME</code>/<code className="mono">ADMIN_PASSWORD_HASH</code> env vars).
+          All mutating actions and collector endpoints require valid credentials. The authenticated username is recorded as <code className="mono">verified_by</code>.
         </div>
       </div>
 
@@ -120,9 +118,6 @@ export default async function AdminPage({
                   </label>
                   <label className="flex flex-col gap-1 text-[12px] text-[var(--fg-dim)]">Confidence
                     <select name="confidence" className="input">{CONF_OPTIONS.map((o) => <option key={o} value={o} selected={o === q.confidence}>{o}</option>)}</select>
-                  </label>
-                  <label className="flex flex-col gap-1 text-[12px] text-[var(--fg-dim)]">Verified by
-                    <input name="verifiedBy" className="input" placeholder="e.g. jane / collector:openai" />
                   </label>
                   <label className="flex flex-col gap-1 text-[12px] text-[var(--fg-dim)]">Free quota value
                     <input name="freeQuotaValue" type="number" className="input" placeholder="e.g. 1500" />
@@ -222,10 +217,10 @@ export default async function AdminPage({
       {/* Live collectors (administrative) */}
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Live Collectors <span className="text-[var(--fg-mute)] text-[12px]">(administrative)</span></h2>
-        <div className="card p-3 text-[12.5px] text-[#fbbf24] border" style={{ borderColor: "#5e4d18", background: "#1f1a08" }}>
-          <strong>Administrative operation.</strong> Runs the OpenRouter live collector, which writes rows with{" "}
+        <div className="card p-3 text-[12.5px] text-[#34d399] border" style={{ borderColor: "#1e5a2e", background: "#0c1f12" }}>
+          <strong>Administrative operation.</strong> Runs the OpenRouter/Gemini live collectors, which write rows with{" "}
           <code className="mono">data_origin = 'live_collector'</code> (auto, confidence <em>likely</em> — not human-verified).
-          No authentication is enforced yet; gate this behind admin auth before any deployment.
+          Protected by HTTP Basic Auth — requires valid admin credentials. CLI execution bypasses HTTP auth.
         </div>
 
         <CollectorRunner />
@@ -310,9 +305,6 @@ export default async function AdminPage({
             <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" name="paymentRequirementKnown" checked /> Payment requirement evidenced</label>
             <label className="flex flex-col gap-1 text-[12px] text-[var(--fg-dim)]">Source URL
               <input name="sourceUrl" className="input" placeholder="https://…" />
-            </label>
-            <label className="flex flex-col gap-1 text-[12px] text-[var(--fg-dim)]">Verified by
-              <input name="verifiedBy" className="input" placeholder="actor / collector" />
             </label>
             <button type="submit" className="btn btn-primary self-start">Add route</button>
           </form>

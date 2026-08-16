@@ -64,12 +64,20 @@ Items are scored by `urgency` and the admin UI sorts most-urgent first.
 The admin page lists these under **Data Quality · Contradictions** and the dashboard shows a
 count + alert.
 
-## Security model (important)
+## Security model
 
-The verification workflow is currently **open** — `/admin` and the mutating server actions
-have no authentication. Before any production deployment:
-1. Gate every function in `src/lib/actions.ts` behind a `requireAdmin()` check.
-2. Record `verified_by` from the authenticated session (the column already exists).
-3. Consider rate-limiting and CSRF protection for the forms.
+Authentication is implemented via **HTTP Basic Auth** (see `src/lib/auth.ts`, `src/middleware.ts`).
+Required environment variables: `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` (scrypt hash).
 
-The data model already supports this; no migration is required. See `CONTRIBUTING.md`.
+Protected surfaces:
+- `/admin` and `/admin/*` — middleware enforces Basic Auth (401 + WWW-Authenticate)
+- All mutating server actions in `actions.ts` — each calls `requireAdmin()` at entry
+- `POST /api/admin/collect/openrouter` and `POST /api/admin/collect/gemini` — explicit auth check
+- `GET /api/admin/collect/*` — read-only status, no auth required
+
+The authenticated username is written to `verified_by` on all mutations.
+Collector identities (`collector:openrouter`, `collector:gemini`) are preserved for automated CLI runs.
+
+CLI collector execution (`npm run collect:openrouter`, `npm run collect:gemini`) bypasses HTTP auth.
+
+**Never deploy without HTTPS** — Basic Auth sends credentials on every request.
