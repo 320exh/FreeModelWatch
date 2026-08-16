@@ -278,7 +278,14 @@ export class DbCollectorSink implements CollectorSink {
     const wasActive = existing.is_active === 1;
     const reactivated = !wasActive;
 
-    if (changes.length === 0 && !reactivated) {
+    // The standardized "why free" note is part of the canonical claim and must be
+    // kept current on every run (it embeds the last-checked date and the
+    // "usage limits not specified" caveat). Refresh it even when no other field
+    // changed, so live-collector rows never drift from the collector's contract.
+    const wantNotes = `${a.free.reason} (last checked ${this.today})`;
+    const notesChanged = (existing.verification_notes ?? "") !== wantNotes;
+
+    if (changes.length === 0 && !reactivated && !notesChanged) {
       db.prepare("UPDATE availability SET last_verified_at = ? WHERE id = ?").run(this.today, a.id);
       return { added: false, changed: false, reactivated: false };
     }
@@ -292,10 +299,14 @@ export class DbCollectorSink implements CollectorSink {
     ).run(
       a.status, a.accessType, a.confidence, bool(a.requiresPaymentMethod), a.inputPricePerMillion,
       a.outputPricePerMillion, a.sourceUrl, a.sourceTitle, a.sourceType, a.expiresAt ?? null, this.today,
-      `${a.free.reason} (last checked ${this.today})`, a.id
+      wantNotes, a.id
     );
     this.linkSource(a.id, sourceId);
 
+    // Only record change/verification history when an actual field changed or the
+    // route was reactivated. A note-only refresh (e.g. updated "last checked" date)
+    // must not generate spurious history rows.
+    if (changes.length > 0 || reactivated) {
     if (reactivated) {
       this.recordChange({
         entityType: "availability",
@@ -331,7 +342,8 @@ export class DbCollectorSink implements CollectorSink {
       newStatus: a.status,
       notes: reactivated ? "Re-activated by live collector." : "Updated by live collector.",
     });
-    return { added: false, changed: true, reactivated };
+    }
+    return { added: false, changed: changes.length > 0 || reactivated, reactivated };
   }
 
   markRemoved(availabilityId: string, reason?: string): boolean {

@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   const dryRun = req.nextUrl.searchParams.get("dryRun") === "1";
   try {
     const report = await runOpenRouterCollector({ dryRun });
-    return NextResponse.json({ ok: true, report });
+    return NextResponse.json({ ok: report.status !== "failed", report });
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : String(err) },

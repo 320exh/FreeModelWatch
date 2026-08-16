@@ -115,8 +115,13 @@ export default async function ModelPage({ params }: { params: Promise<{ id: stri
                   {a.apiFormat && <Field label="API format" value={a.apiFormat} />}
                   {a.inputPricePerMillion != null && <Field label="After free" value={`$${a.inputPricePerMillion}/M in`} />}
                   {a.expiresAt && <Field label="Free until" value={a.expiresAt} />}
-                  {a.dataOrigin && <Field label="Data origin" value={a.dataOrigin === "seed" ? "Demo seed" : a.dataOrigin === "production" ? "Verified" : "User report"} />}
+                  {a.dataOrigin && <Field label="Data origin" value={a.dataOrigin === "seed" ? "Demo seed" : a.dataOrigin === "production" ? "Verified" : a.dataOrigin === "user_report" ? "User report" : "Live collector"} />}
                 </div>
+                {a.isActive && a.dataOrigin === "live_collector" && !a.freeQuotaValue && !a.dailyLimit && !a.monthlyLimit && !a.rateLimitRpm && !a.rateLimitTpm && (
+                  <div className="text-[12px] text-[#fbbf24] border rounded p-2" style={{ borderColor: "#5e4d18", background: "#1f1a08" }}>
+                    Free inference pricing; usage limits (rate / request / token caps) are <strong>not specified by the source</strong>. This is not unlimited access.
+                  </div>
+                )}
                 <div className="text-[12px] text-[var(--fg-dim)]">
                   <span className="text-[var(--fg-mute)] uppercase tracking-wider text-[10.5px]">Why free: </span>
                   {ACCESS_WHY[a.accessType]}
@@ -130,8 +135,13 @@ export default async function ModelPage({ params }: { params: Promise<{ id: stri
                   </span>
                   {sources.length > 0 ? (
                     <div className="flex flex-col gap-1">
+                      {a.sourceUrl && (
+                        <a href={a.sourceUrl} target="_blank" rel="noreferrer" className="text-[12.5px] text-[var(--accent)] hover:underline w-fit font-medium">
+                          {a.sourceTitle ?? a.sourceUrl} ↗ <span className="text-[var(--fg-mute)]">(model-specific)</span>
+                        </a>
+                      )}
                       {sources.map((s) => (
-                        <a key={s.id} href={s.url} target="_blank" rel="noreferrer" className="text-[12.5px] text-[var(--accent)] hover:underline w-fit">
+                        <a key={s.id} href={s.url} target="_blank" rel="noreferrer" className="text-[12.5px] text-[var(--fg-dim)] hover:underline w-fit">
                           {s.title ?? s.url} {s.isVerified ? "✓" : ""} ↗
                         </a>
                       ))}

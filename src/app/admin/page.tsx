@@ -1,6 +1,7 @@
 import { getVerificationQueue, detectContradictions, getAllModels, getAllProviders, getStaleCount, getLastCollectorRuns, type QueueSeverity, type CollectorRunRow } from "@/lib/queries";
-import { markVerified, adminVerifyRoute, addAvailability, reportChange, adminRunCollector } from "@/lib/actions";
+import { markVerified, adminVerifyRoute, addAvailability, reportChange } from "@/lib/actions";
 import { AccessBadge, ConfidenceBadge, FreshnessBadge } from "@/components/ui";
+import CollectorRunner from "@/components/CollectorRunner";
 import { daysAgo } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -190,12 +191,7 @@ export default async function AdminPage({
           No authentication is enforced yet; gate this behind admin auth before any deployment.
         </div>
 
-        <form action={act(adminRunCollector)} className="flex flex-wrap items-end gap-3 card p-4">
-          <input type="hidden" name="collectorId" value="openrouter" />
-          <button type="submit" name="dryRun" value="" className="btn btn-primary">Run OpenRouter collector (dry run)</button>
-          <button type="submit" name="dryRun" value="true" className="btn">Run OpenRouter collector (LIVE)</button>
-          <span className="text-[12px] text-[var(--fg-mute)]">Dry run fetches + normalizes without writing. LIVE updates the database.</span>
-        </form>
+        <CollectorRunner />
 
         <h3 className="text-[13px] font-semibold text-[var(--fg-dim)] uppercase tracking-wider">Last runs</h3>
         {runs.length === 0 ? (

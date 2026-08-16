@@ -294,6 +294,7 @@ export function resetDb(): void {
     "harnesses",
     "providers",
     "models",
+    "collector_runs",
   ]) {
     db.exec(`DELETE FROM ${t}`);
   }

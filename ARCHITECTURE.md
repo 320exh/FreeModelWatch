@@ -90,8 +90,13 @@ Collectors therefore never touch SQLite directly, which keeps them trivially uni
 New providers are added by implementing one `Collector` and registering it in
 `src/lib/collectors/registry.ts` — no changes to queries, pages, or the API.
 
-The example `OpenAICollector` shows the shape; its network calls are stubbed. Real
-collectors should fetch the provider's pricing page / API and map it into `NormalizedAvailability`.
+The example `OpenAICollector` (under `collectors/examples/`) shows the shared `Collector`
+shape with stubbed network calls. The **OpenRouter collector** (`collectors/openrouter.ts` +
+`collectors/run.ts` + `collectors/dbSink.ts`) is the first *real* collector and is the reference
+implementation — it fetches the live catalog, normalizes with stable ids, classifies free
+pricing (handling OpenRouter's `-1` sentinel), writes only through `DbCollectorSink`, and records
+`collector_runs` history. See `COLLECTORS.md` for the full contract and the checklist every new
+provider collector must satisfy.
 
 ## Known limitations / future work
 - User watchlists/alerts (the earlier design draft's `user_watchlist`) are not implemented.

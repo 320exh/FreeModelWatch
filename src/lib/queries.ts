@@ -643,8 +643,20 @@ export function scoreModel(m: ModelView): ScoreBreakdown {
   const quotaBonus = Math.min(12, Math.log10(Math.max(10, maxQuota)) * 3);
   const freeAccess = Math.round(Math.min(25, bestAccess + quotaBonus * 0.4));
 
-  const confRank: Record<VerificationConfidence, number> = { verified: 18, likely: 10, unverified: 3, stale: 0 };
-  const reliability = confRank[m.bestConfidence] ?? 0;
+  // Reliability is derived from the *trust tier* (data origin + confidence), not
+  // the raw `verification_confidence` column alone. A seed/demo row can be stored
+  // with confidence "verified", but it is still demo data and must not outrank a
+  // live_collector "likely" row — otherwise curated seed dominates real live data.
+  const relRank: Record<FreshnessTier, number> = {
+    live_verified: 18,
+    likely: 11,
+    unverified: 3,
+    seed_demo: 5,
+    stale: 0,
+    expired: 0,
+    unavailable: 0,
+  };
+  const reliability = relRank[m.bestFreshness] ?? 0;
 
   const freshRank: Record<FreshnessTier, number> = {
     live_verified: 15, likely: 10, unverified: 3, seed_demo: 4, stale: 0, expired: 0, unavailable: 0,

@@ -29,8 +29,11 @@ npm run test       # vitest run (in-memory DB, seeded)
 The database is seeded from `src/lib/seed-data.ts` + `src/lib/seed-availability.ts` via
 `seedDatabase()`. Seeded rows are marked `data_origin = 'seed'` so the UI shows them as
 **demo data**, never as "live verified". Real data should be entered through the admin
-verification workflow (`/admin`) or automated collectors (see `src/lib/collectors/`), which
-write `data_origin = 'production'` / `'collector'` and `verification_confidence = 'verified'`.
+verification workflow (`/admin`) or automated collectors (see `src/lib/collectors/` and
+`COLLECTORS.md`). A live collector writes `data_origin = 'live_collector'` (auto, **not**
+human-verified) and `verification_confidence = 'likely'`. Only an explicit admin verification
+promotes a row to `data_origin = 'production'` / `verification_confidence = 'verified'` — the
+collector never does this on its own.
 
 Key concepts:
 
@@ -66,6 +69,8 @@ src/app/
 
 - `DATABASE_DESIGN.md` — schema as implemented
 - `ARCHITECTURE.md` — layering, data flow, and the collector roadmap
+- `COLLECTORS.md` — **live collector contract, how to run them, what "free" means, and the
+  checklist every new provider collector must satisfy**
 - `API.md` — JSON API surface
 - `DATA_VERIFICATION.md` — how freshness/verification works and the admin security model
 - `CONTRIBUTING.md` — adding models/providers/collectors, and the auth TODO

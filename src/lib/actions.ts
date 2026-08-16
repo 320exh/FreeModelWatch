@@ -334,7 +334,9 @@ export async function adminRunCollector(formData: FormData | Record<string, any>
     safeRevalidate("/providers");
     safeRevalidate("/changes");
     safeRevalidate("/");
-    return { ok: true, report };
+    // `ok` reflects the collector's actual outcome, not just that the call
+    // completed. A failed/partial run must not be reported as success.
+    return { ok: report.status !== "failed", report };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

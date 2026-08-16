@@ -139,6 +139,49 @@ export async function runOpenRouterCollector(opts: RunOptions = {}): Promise<Col
 
   report.modelsDiscovered = rawModels.length;
 
+  // --- Failure-safety sanity guard (Scenario E: partial/truncated response) ---
+  // If a previous successful run discovered a substantially larger catalog and this
+  // run returns far fewer models, the response is likely truncated or a
+  // partial/error payload. We must NOT mass-remove or mutate existing live data on
+  // a suspicious response — report it and bail out so existing availability stays
+  // intact. (Cold start / first run has no previous count, so it is never guarded.)
+  const prevRun = getDb()
+    .prepare(
+      "SELECT models_discovered FROM collector_runs WHERE collector = ? AND status IN ('success','partial') ORDER BY started_at DESC LIMIT 1"
+    )
+    .get(OPENROUTER_PROVIDER_ID) as any;
+  const prevCount = prevRun ? Number(prevRun.models_discovered) : 0;
+  const SUSPICIOUS = prevCount > 20 && rawModels.length < prevCount * 0.5;
+  if (SUSPICIOUS) {
+    const msg = `Catalog returned only ${rawModels.length} models, far below the previous run's ${prevCount}. Treating as a partial/truncated response — refusing to mutate existing data.`;
+    report.status = "failed";
+    report.warnings.push(msg);
+    report.errorMessage = msg;
+    report.finishedAt = new Date().toISOString();
+    if (!dryRun) {
+      sink.recordRun({
+        id: uid("run"),
+        collector: OPENROUTER_PROVIDER_ID,
+        startedAt,
+        finishedAt: report.finishedAt,
+        status: report.status,
+        dryRun,
+        modelsDiscovered: report.modelsDiscovered,
+        freeModels: 0,
+        modelsAdded: 0,
+        modelsChanged: 0,
+        modelsRemoved: 0,
+        freeRoutesAdded: 0,
+        freeRoutesRemoved: 0,
+        errorCount: report.errors.length,
+        warningCount: report.warnings.length,
+        errorMessage: report.errorMessage,
+        summary: JSON.stringify(report, null, 2),
+      });
+    }
+    return report;
+  }
+
   const normalized: NormalizedModel[] = [];
   for (const raw of rawModels) {
     try {

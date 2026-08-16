@@ -128,7 +128,7 @@ export function formatQuota(a: {
     const period = a.freeQuotaPeriod ? `/${a.freeQuotaPeriod}` : "";
     parts.push(`${a.freeQuotaValue.toLocaleString()} ${unit}${period}`);
   }
-  return parts.join(" · ") || "—";
+  return parts.join(" · ") || "Not specified";
 }
 
 export function formatNumber(n: number | null | undefined): string {

@@ -166,19 +166,45 @@ export function classifyPricing(pricing: OpenRouterPricing | undefined | null): 
   }
 
   const problems: string[] = [];
+  let hasPositive = false;
+  let hasNegative = false;
   for (const key of FREE_PRICE_KEYS) {
     const raw = pricing[key];
     if (raw == null) continue; // absent dimension is treated as free
     const n = typeof raw === "number" ? raw : Number(raw);
-    if (Number.isFinite(n) && n > 0) problems.push(`${String(key)}=${raw}`);
+    if (!Number.isFinite(n)) {
+      // Non-numeric sentinel (e.g. "-1" encoded as a string that isn't a number).
+      problems.push(`${String(key)}=${raw}`);
+      hasNegative = true;
+      continue;
+    }
+    if (n > 0) {
+      hasPositive = true;
+      problems.push(`${String(key)}=${raw}`);
+    } else if (n < 0) {
+      // OpenRouter uses "-1" as a sentinel for routing/meta models whose price is
+      // NOT a per-token amount (e.g. openrouter/auto picks a sub-model dynamically).
+      // A negative price is NOT zero-cost inference and must not be classified free.
+      hasNegative = true;
+      problems.push(`${String(key)}=${raw} (negative sentinel)`);
+    }
   }
 
-  if (problems.length > 0) {
+  if (hasPositive) {
     return {
       isFree: false,
       pricingClass: "paid",
       accessType: "free_through_aggregator",
       reason: `Paid: non-zero price(s) on ${problems.join(", ")}.`,
+    };
+  }
+
+  if (hasNegative) {
+    return {
+      isFree: false,
+      pricingClass: "unknown",
+      accessType: "free_through_aggregator",
+      reason: `Cannot assert free: negative/sentinel price on ${problems.join(", ")}. OpenRouter uses -1 for routing/meta models whose price is not a fixed per-token amount.`,
     };
   }
 
@@ -398,7 +424,10 @@ export function normalizeModel(raw: OpenRouterModel, providerId: string = OPENRO
     maxOutputTokens: raw.top_provider?.max_completion_tokens ?? null,
     inputModalities,
     outputModalities,
-    visionSupport: outputModalities.includes("image"),
+    // "Vision" means the model can *accept images as input* (multimodal
+    // understanding) — keyed off input_modalities, NOT output_modalities
+    // (which would only be true for image-generation models).
+    visionSupport: inputModalities.includes("image"),
     toolCalling: supported.includes("tools") || supported.includes("tool_choice"),
     structuredOutput: supported.includes("response_format"),
     reasoningSupport: raw.reasoning?.default_enabled === true,
@@ -413,6 +442,14 @@ export function normalizeModel(raw: OpenRouterModel, providerId: string = OPENRO
 
   let availability: NormalizedAvailabilityRow | null = null;
   if (free.isFree) {
+    // OpenRouter's catalog does NOT publish reliable per-model rate limits,
+    // request caps, or token quotas. "Free" here means zero-cost inference only —
+    // it must NOT be read as "unlimited". Record that explicitly so the UI never
+    // implies unrestricted usage.
+    const freeWithLimitsNote: FreeClassification = {
+      ...free,
+      reason: `${free.reason} Free inference pricing; usage limits (rate/request/token caps) are not specified by the source.`,
+    };
     availability = {
       id: availId,
       modelId,
@@ -422,7 +459,7 @@ export function normalizeModel(raw: OpenRouterModel, providerId: string = OPENRO
       confidence: "likely",
       isFree: true,
       pricingClass: free.pricingClass,
-      free,
+      free: freeWithLimitsNote,
       inputPricePerMillion: pricePerMillion(raw.pricing?.prompt),
       outputPricePerMillion: pricePerMillion(raw.pricing?.completion),
       requiresApiKey: true,
