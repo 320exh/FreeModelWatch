@@ -23,6 +23,7 @@ const ALERT_STYLE: Record<string, { bg: string; fg: string; icon: string }> = {
   down: { bg: "#231014", fg: "#f87171", icon: "🔴" },
   warn: { bg: "#1f1a08", fg: "#fbbf24", icon: "⚠️" },
   info: { bg: "#0d1929", fg: "#60a5fa", icon: "ℹ️" },
+  seed: { bg: "#1a1407", fg: "#d9c27a", icon: "⚠" },
 };
 
 export default function DashboardPage() {

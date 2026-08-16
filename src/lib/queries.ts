@@ -503,7 +503,9 @@ export function getModelView(id: string): (ModelView & { harnessCompat: HarnessC
  */
 export function canonicalModelKey(id: string): string {
   const i = id.indexOf("__");
-  return i > -1 ? id.slice(i + 2) : id;
+  const afterPrefix = i > -1 ? id.slice(i + 2) : id;
+  const slash = afterPrefix.indexOf("/");
+  return slash > -1 ? afterPrefix.slice(slash + 1) : afterPrefix;
 }
 
 export interface CrossProviderRoute {
@@ -543,7 +545,7 @@ export function getCrossProviderRoutes(modelId: string): CrossProviderRoute[] {
          FROM availability a
          JOIN models m ON m.id = a.model_id
          JOIN providers p ON p.id = a.provider_id
-        WHERE (CASE WHEN instr(m.id,'__')>0 THEN substr(m.id, instr(m.id,'__')+2) ELSE m.id END) = ?
+         WHERE (CASE WHEN instr(substr(m.id, instr(m.id,'__')+2),'/')>0 THEN substr(m.id, instr(m.id,'__')+2+instr(substr(m.id, instr(m.id,'__')+2),'/')) ELSE CASE WHEN instr(m.id,'__')>0 THEN substr(m.id, instr(m.id,'__')+2) ELSE m.id END END) = ?
           AND a.is_active = 1
         ORDER BY (CASE WHEN (a.input_price_per_million = 0 AND a.output_price_per_million = 0) OR a.access_type = 'completely_free' THEN 0 ELSE 1 END), p.name`
     )

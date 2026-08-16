@@ -3,6 +3,7 @@ import {
   OpenRouterCollector,
   normalizeModel,
   OPENROUTER_PROVIDER_ID,
+  OPENROUTER_SOURCE_URL,
   type OpenRouterModel,
   type NormalizedModel,
 } from "./openrouter";
@@ -12,6 +13,7 @@ import {
   GEMINI_PROVIDER_ID,
   GEMINI_CATALOG_SNAPSHOT,
   GEMINI_SOURCE_CATALOG_ID,
+  GEMINI_SOURCE_CATALOG_URL,
   GEMINI_SOURCE_PRICING_ID,
   GEMINI_SOURCE_RATELIMITS_ID,
   GEMINI_SOURCE_BILLING_ID,
@@ -246,7 +248,10 @@ export async function runOpenRouterCollector(opts: RunOptions = {}): Promise<Col
           if (changed) report.changedFreeRoutes.push({ id: a.id, fields: ["status/price"] });
         }
       } else {
-        const mr = sink.upsertModelRow(m);
+        const mr = sink.upsertModelRow(m, {
+          sourceUrl: OPENROUTER_SOURCE_URL,
+          sourceNotes: "Changed in OpenRouter catalog during live collection.",
+        });
         if (mr.added) {
           report.newModels.push(m.id);
           report.modelsAdded++;
@@ -284,7 +289,7 @@ export async function runOpenRouterCollector(opts: RunOptions = {}): Promise<Col
     if (dryRun) {
       report.removedFreeRoutes.push(cur.id);
     } else {
-      const removed = sink.markRemoved(cur.id, reason);
+      const removed = sink.markRemoved(cur.id, reason, OPENROUTER_SOURCE_URL);
       if (removed) {
         report.removedFreeRoutes.push(cur.id);
         report.freeRoutesRemoved++;
@@ -513,7 +518,10 @@ export async function runGeminiCollector(opts: RunOptions = {}): Promise<Collect
           if (changed) report.changedFreeRoutes.push({ id: a.id, fields: ["status/price/access/limits"] });
         }
       } else {
-        const mr = sink.upsertModelRow(m);
+        const mr = sink.upsertModelRow(m, {
+          sourceUrl: GEMINI_SOURCE_CATALOG_URL,
+          sourceNotes: "Changed in Gemini catalog during live collection.",
+        });
         if (mr.added) {
           report.newModels.push(m.id);
           report.modelsAdded++;
@@ -551,7 +559,7 @@ export async function runGeminiCollector(opts: RunOptions = {}): Promise<Collect
     if (dryRun) {
       report.removedFreeRoutes.push(cur.id);
     } else {
-      const removed = sink.markRemoved(cur.id, reason);
+      const removed = sink.markRemoved(cur.id, reason, GEMINI_SOURCE_CATALOG_URL);
       if (removed) {
         report.removedFreeRoutes.push(cur.id);
         report.freeRoutesRemoved++;

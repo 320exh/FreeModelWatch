@@ -198,7 +198,10 @@ export class DbCollectorSink implements CollectorSink {
     return [GEMINI_SOURCE_CATALOG_ID, GEMINI_SOURCE_PRICING_ID, GEMINI_SOURCE_RATELIMITS_ID, GEMINI_SOURCE_BILLING_ID];
   }
 
-  upsertModelRow(m: NormalizedModelRow): { added: boolean; changed: boolean; changedFields: string[] } {
+  upsertModelRow(
+    m: NormalizedModelRow,
+    opts?: { sourceUrl?: string; sourceNotes?: string }
+  ): { added: boolean; changed: boolean; changedFields: string[] } {
     const db = getDb();
     const existing = db.prepare("SELECT * FROM models WHERE id = ?").get(m.id) as any;
     if (!existing) {
@@ -218,6 +221,19 @@ export class DbCollectorSink implements CollectorSink {
     }
 
     const changes: string[] = [];
+    const modelProp = (field: string): string => {
+      const map: Record<string, string> = {
+        context_window: "contextWindow",
+        input_modalities: "inputModalities",
+        output_modalities: "outputModalities",
+        vision_support: "visionSupport",
+        tool_calling: "toolCalling",
+        structured_output: "structuredOutput",
+        reasoning_support: "reasoningSupport",
+        official_page_url: "officialPageUrl",
+      };
+      return map[field] ?? field;
+    };
     const cmp = (field: string, a: unknown, b: unknown) => {
       const av = a == null ? null : String(a);
       const bv = b == null ? null : String(b);
@@ -256,10 +272,10 @@ export class DbCollectorSink implements CollectorSink {
         entityId: m.id,
         fieldChanged: field,
         oldValue: String((existing as any)[field] ?? ""),
-        newValue: String((m as any)[field] ?? ""),
+        newValue: String((m as any)[modelProp(field)] ?? ""),
         changeSource: "automated",
-        sourceUrl: OPENROUTER_SOURCE_URL,
-        notes: "Changed in OpenRouter catalog during live collection.",
+        sourceUrl: opts?.sourceUrl ?? OPENROUTER_SOURCE_URL,
+        notes: opts?.sourceNotes ?? "Changed in OpenRouter catalog during live collection.",
       });
     }
     return { added: false, changed: true, changedFields: changes };
@@ -405,14 +421,20 @@ export class DbCollectorSink implements CollectorSink {
     return { added: false, changed: changes.length > 0 || reactivated, reactivated };
   }
 
-  markRemoved(availabilityId: string, reason?: string): boolean {
+  markRemoved(availabilityId: string, reason?: string, sourceUrl?: string): boolean {
     const db = getDb();
     const existing = db.prepare("SELECT * FROM availability WHERE id = ?").get(availabilityId) as any;
     if (!existing || existing.is_active !== 1) return false;
-    const note = reason ?? "Model no longer present in the OpenRouter live catalog.";
+    const defaultReason = existing.provider_id === GEMINI_PROVIDER_ID
+      ? "Model no longer present in the Gemini live catalog."
+      : "Model no longer present in the OpenRouter live catalog.";
+    const note = reason ?? defaultReason;
+    const defaultCatalog = existing.provider_id === GEMINI_PROVIDER_ID
+      ? "Google catalog"
+      : "OpenRouter catalog";
     db.prepare(
       `UPDATE availability SET is_active=0, status='unavailable', last_verified_at=?, verification_method='collector',
-        data_origin='live_collector', verification_notes='Removed from OpenRouter catalog — no longer returned by the API.'
+        data_origin='live_collector', verification_notes='Removed from ${defaultCatalog} — no longer returned by the API.'
        WHERE id=?`
     ).run(this.today, availabilityId);
     this.recordChange({
@@ -422,7 +444,7 @@ export class DbCollectorSink implements CollectorSink {
       oldValue: `${existing.verification_confidence}/${existing.status}`,
       newValue: "unavailable",
       changeSource: "automated",
-      sourceUrl: OPENROUTER_SOURCE_URL,
+      sourceUrl: sourceUrl ?? OPENROUTER_SOURCE_URL,
       notes: note,
     });
     this.appendVerificationHistory({
