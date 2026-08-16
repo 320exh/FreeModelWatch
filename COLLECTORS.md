@@ -24,6 +24,69 @@ await runOpenRouterCollector({ dryRun: false });
 You can also run it from the admin UI (`/admin` → "Live Collectors") which shows a
 loading/success/failure banner and the run history.
 
+## How to run the Gemini / Google AI Studio collector
+
+```bash
+# LIVE — writes to the database (data_origin = 'live_collector')
+npm run collect:gemini
+
+# DRY RUN — fetches + normalizes, reports what would change, writes nothing
+npm run collect:gemini:dry
+
+# Or programmatically
+import { runGeminiCollector } from "@/lib/collectors/run";
+await runGeminiCollector({ dryRun: false });
+
+# Optional: live discovery against the real model list (requires a key)
+GEMINI_API_KEY=xxx npm run collect:gemini
+```
+
+The Gemini collector is the **second** live collector. It is deliberately modeled on the
+OpenRouter collector but proves a *different* product claim: Google offers a **direct provider
+API free tier** (`access_type = direct_api`), whereas OpenRouter offers **free inference through
+an aggregator** (`access_type = free_through_aggregator`). The two are never collapsed into one
+generic "free" representation — see `src/lib/format.ts` (`ACCESS_LABELS` / `ACCESS_WHY`) and
+`src/components/ui.tsx` where `DIRECT` and `AGG` badges are visually distinct.
+
+> Without `GEMINI_API_KEY`, the collector falls back to a clearly-labeled, frozen snapshot of the
+> official model catalog (`GEMINI_CATALOG_SNAPSHOT`) so it is runnable anywhere. Set the key for
+> true live discovery (the `models.list` endpoint requires it).
+
+### How Gemini "free" is classified
+
+A model is free when Google's official pricing page lists it as **"Free of charge"** for input
+and output. The authoritative free-tier set is transcribed into `GEMINI_FREE_TIER`
+(`src/lib/collectors/gemini.ts`), sourced from `https://ai.google.dev/gemini-api/docs/pricing`.
+
+### Gemini limits: what we capture vs. what we DON'T invent
+
+Google's official rate-limits docs **do not publish a fixed public RPM/RPD/TPM grid** for the
+standard Gemini API — the docs state limits vary by usage tier and are shown per-project in AI
+Studio. Therefore:
+
+- `rate_limit_rpm` → **null** (unknown / dynamic per tier — never invented)
+- `daily_limit` → **null** (unknown / dynamic per tier — never invented)
+- `rate_limit_tpm` → the **published per-model token-rate limit** from the official rate-limits
+  page (captured where Google publishes one), clearly noted as the only token-rate figure Google
+  exposes.
+- `context_window` / `max_output_tokens` → captured from the live `models.list` API (real,
+  per-model limits).
+
+Free routes are stored with `requires_payment_method = 0` (Free tier needs no credit card) and
+`requires_api_key = 1` / `requires_signup = 1`.
+
+### Gemini sources
+
+Each imported route links to **four** official sources (not one), because the claim spans
+multiple official pages:
+
+- `src-gemini-models-api` — model catalog (`models.list` / models doc)
+- `src-gemini-pricing` — pricing ("Free of charge" tier)
+- `src-gemini-rate-limits` — published per-model token-rate limits
+- `src-gemini-billing` — Free tier requires no card
+
+This matches the app's "one claim, multiple evidence sources" model (see DATA_VERIFICATION.md).
+
 ## How often should it run?
 
 OpenRouter's free catalog changes frequently (models added, promoted, or removed). A reasonable
@@ -56,6 +119,11 @@ quotas. The collector therefore records, for every free route:
 > source**.
 
 The model detail page surfaces this explicitly so users never read "free" as "unrestricted".
+
+> **Gemini exception:** Google *does* publish a per-model token-rate limit (TPM). The Gemini
+> collector captures it as `rate_limit_tpm` and links the rate-limits source. The per-minute
+> request (RPM) and daily request (RPD) limits remain dynamic per usage tier and are stored as
+> `null` (unknown), never invented.
 
 ## What the collector CAN and CANNOT determine
 

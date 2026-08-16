@@ -13,7 +13,7 @@ export const metadata = {
 
 const ACCESS_OPTIONS = [
   "completely_free", "free_tier", "free_credits", "free_with_limits",
-  "free_through_aggregator", "free_local", "temporarily_free", "community_unofficial",
+  "free_through_aggregator", "free_local", "temporarily_free", "community_unofficial", "direct_api",
 ];
 const CONF_OPTIONS = ["verified", "likely", "unverified", "stale"];
 

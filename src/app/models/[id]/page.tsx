@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getModelView, getAllProviders, getProvider, getVerificationHistory } from "@/lib/queries";
+import { getModelView, getAllProviders, getProvider, getVerificationHistory, getCrossProviderRoutes } from "@/lib/queries";
 import { AccessBadge, ConfidenceBadge, FreshnessBadge, OpenBadge, StatusPill, CategoryBadge } from "@/components/ui";
 import { formatQuota, daysAgo, STATUS_ICONS, ACCESS_WHY } from "@/lib/format";
 
@@ -23,6 +23,7 @@ export default async function ModelPage({ params }: { params: Promise<{ id: stri
 
   const providers = getAllProviders();
   const providerMap = new Map(providers.map((p) => [p.id, p]));
+  const crossProvider = getCrossProviderRoutes(id);
 
   return (
     <div className="flex flex-col gap-6">
@@ -159,6 +160,52 @@ export default async function ModelPage({ params }: { params: Promise<{ id: stri
           </div>
         )}
       </section>
+
+      {crossProvider.length > 1 && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">Same model across providers ⚖️</h2>
+          <p className="text-[13px] text-[var(--fg-dim)]">
+            Compare how this exact model is offered — e.g. directly from the vendor&apos;s API
+            (<span className="chip" style={{ color: "#38bdf8", borderColor: "#1d4e57", background: "#08222a" }}>DIRECT</span>)
+            versus through an aggregator
+            (<span className="chip" style={{ color: "#22d3ee", borderColor: "#1d4e57", background: "#08222a" }}>AGG</span>).
+          </p>
+          <div className="card overflow-x-auto scrollbar-thin">
+            <table className="w-full text-[13px]">
+              <thead className="text-[var(--fg-mute)] text-[11px] uppercase tracking-wider">
+                <tr className="border-b border-[var(--border)]">
+                  <th className="text-left font-semibold p-3">Provider</th>
+                  <th className="text-left font-semibold p-3">Type</th>
+                  <th className="text-left font-semibold p-3">Access</th>
+                  <th className="text-left font-semibold p-3">Price</th>
+                  <th className="text-left font-semibold p-3">Rate limit</th>
+                  <th className="text-left font-semibold p-3">Card</th>
+                  <th className="text-left font-semibold p-3">Confidence</th>
+                </tr>
+              </thead>
+              <tbody>
+                {crossProvider.map((r) => (
+                  <tr key={r.availabilityId} className="border-b border-[var(--border)] last:border-0">
+                    <td className="p-3">
+                      <Link href={`/providers/${r.providerId}`} className="text-[var(--accent)] hover:underline">{r.providerName}</Link>
+                    </td>
+                    <td className="p-3 text-[var(--fg-dim)]">{r.providerCategory}</td>
+                    <td className="p-3"><AccessBadge type={r.accessType} short /></td>
+                    <td className="p-3 mono text-[var(--fg)]">
+                      {r.isFree ? (r.inputPricePerMillion === 0 && r.outputPricePerMillion === 0 ? "Free" : `$${r.inputPricePerMillion}/M in`) : "Paid"}
+                    </td>
+                    <td className="p-3 mono text-[var(--fg)]">
+                      {r.rateLimitRpm ? `${r.rateLimitRpm}/min` : r.rateLimitTpm ? `${r.rateLimitTpm.toLocaleString()}/min tok` : r.dailyLimit ? `${r.dailyLimit}/day` : "—"}
+                    </td>
+                    <td className="p-3">{r.requiresPaymentMethod ? "Required" : "No card"}</td>
+                    <td className="p-3"><ConfidenceBadge conf={r.verificationConfidence as any} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Coding-harness compatibility</h2>

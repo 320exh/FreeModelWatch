@@ -141,7 +141,7 @@ export function pricePerMillion(priceStr: string | number | undefined | null): n
 export interface FreeClassification {
   isFree: boolean;
   /** Short machine classification used in notes / debugging. */
-  pricingClass: "zero_cost_inference" | "paid" | "unknown";
+  pricingClass: "zero_cost_inference" | "free_tier" | "paid" | "unknown";
   accessType: AccessType;
   reason: string;
 }
@@ -377,6 +377,10 @@ export interface NormalizedAvailabilityRow {
   free: FreeClassification;
   inputPricePerMillion: number | null;
   outputPricePerMillion: number | null;
+  rateLimitRpm: number | null;
+  rateLimitTpm: number | null;
+  dailyLimit: number | null;
+  monthlyLimit: number | null;
   requiresApiKey: boolean;
   requiresPaymentMethod: boolean;
   requiresSignup: boolean;
@@ -462,6 +466,10 @@ export function normalizeModel(raw: OpenRouterModel, providerId: string = OPENRO
       free: freeWithLimitsNote,
       inputPricePerMillion: pricePerMillion(raw.pricing?.prompt),
       outputPricePerMillion: pricePerMillion(raw.pricing?.completion),
+      rateLimitRpm: null,
+      rateLimitTpm: null,
+      dailyLimit: null,
+      monthlyLimit: null,
       requiresApiKey: true,
       requiresPaymentMethod: false,
       requiresSignup: true,

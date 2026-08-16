@@ -13,6 +13,8 @@ const ACCESS_TYPES: AccessType[] = [
   "free_through_aggregator",
   "free_local",
   "temporarily_free",
+  "community_unofficial",
+  "direct_api",
 ];
 
 const CAPS = [

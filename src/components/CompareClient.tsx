@@ -48,6 +48,7 @@ const ACCESS_LABEL: Record<string, string> = {
   free_local: "Local",
   temporarily_free: "Temp Free",
   community_unofficial: "Community",
+  direct_api: "Direct API",
 };
 
 function daysAgo(iso: string | null) {

@@ -30,8 +30,10 @@ The database is seeded from `src/lib/seed-data.ts` + `src/lib/seed-availability.
 `seedDatabase()`. Seeded rows are marked `data_origin = 'seed'` so the UI shows them as
 **demo data**, never as "live verified". Real data should be entered through the admin
 verification workflow (`/admin`) or automated collectors (see `src/lib/collectors/` and
-`COLLECTORS.md`). A live collector writes `data_origin = 'live_collector'` (auto, **not**
-human-verified) and `verification_confidence = 'likely'`. Only an explicit admin verification
+`COLLECTORS.md`). Two live collectors exist: **OpenRouter** (`free_through_aggregator`) and
+**Gemini / Google AI Studio** (`direct_api`). A live collector writes
+`data_origin = 'live_collector'` (auto, **not** human-verified) and
+`verification_confidence = 'likely'`. Only an explicit admin verification
 promotes a row to `data_origin = 'production'` / `verification_confidence = 'verified'` — the
 collector never does this on its own.
 

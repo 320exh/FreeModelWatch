@@ -10,6 +10,7 @@ export const ACCESS_LABELS: Record<AccessType, string> = {
   free_local: "Local / Self-host",
   temporarily_free: "Temp Free",
   community_unofficial: "Community",
+  direct_api: "Direct API Free Tier",
 };
 
 // WHY something is considered free — never collapse into a generic "FREE" badge.
@@ -23,6 +24,7 @@ export const ACCESS_WHY: Record<AccessType, string> = {
   free_local: "Open weights you run locally — fully free, no API bill.",
   temporarily_free: "Promotional / time-limited free access; may expire.",
   community_unofficial: "Community-shared or unofficial access; verify before relying.",
+  direct_api: "Direct provider free tier (e.g. Google AI Studio / Gemini API) — free inference from the vendor itself, not an aggregator.",
 };
 
 export const ACCESS_SHORT: Record<AccessType, string> = {
@@ -35,6 +37,7 @@ export const ACCESS_SHORT: Record<AccessType, string> = {
   free_local: "LOCAL",
   temporarily_free: "TEMP",
   community_unofficial: "COMMUNITY",
+  direct_api: "DIRECT",
 };
 
 export const FRESHNESS_LABELS: Record<FreshnessTier, string> = {

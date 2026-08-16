@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getDb } from "./db";
 import { getAvailability } from "./queries";
-import { runOpenRouterCollector, type CollectorRunReport } from "./collectors/run";
+import { runOpenRouterCollector, runGeminiCollector, type CollectorRunReport } from "./collectors/run";
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -324,10 +324,11 @@ export async function reportChange(formData: FormData | Record<string, any>) {
 export async function adminRunCollector(formData: FormData | Record<string, any>): Promise<{ ok: boolean; report?: CollectorRunReport; error?: string }> {
   const fields = toFields(formData);
   const collectorId = str(fields["collectorId"]) || "openrouter";
-  if (collectorId !== "openrouter") return { ok: false, error: `Unknown collector: ${collectorId}` };
   const dryRun = bool(fields["dryRun"]);
   try {
-    const report = await runOpenRouterCollector({ dryRun });
+    const report = collectorId === "gemini"
+      ? await runGeminiCollector({ dryRun })
+      : await runOpenRouterCollector({ dryRun });
     safeRevalidate("/admin");
     safeRevalidate("/models");
     safeRevalidate("/best");

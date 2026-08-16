@@ -7,7 +7,8 @@ export type AccessType =
   | "free_through_harness"
   | "free_local"
   | "temporarily_free"
-  | "community_unofficial";
+  | "community_unofficial"
+  | "direct_api";
 
 export type AvailabilityStatus =
   | "available"

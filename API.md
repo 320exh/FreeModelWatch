@@ -12,7 +12,7 @@ metadata.
 
 Query params:
 - `limit` (1–200, default 50), `offset` (default 0)
-- `access` — comma-separated `AccessType` values (e.g. `completely_free,free_tier`)
+- `access` — comma-separated `AccessType` values (e.g. `completely_free,free_tier,direct_api,free_through_aggregator`)
 - `verified` — `true` to require `verification_confidence = 'verified'`
 - `noCard` — `true` to exclude models that require a payment method
 - `harness` — harness id; only models compatible with it

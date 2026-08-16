@@ -28,6 +28,8 @@ function colorForAccess(a: AccessType): { color: string; borderColor: string; ba
       return { color: "#fbbf24", borderColor: "#5e4d18", background: "#1f1a08" };
     case "free_through_aggregator":
       return { color: "#22d3ee", borderColor: "#1d4e57", background: "#08222a" };
+    case "direct_api":
+      return { color: "#38bdf8", borderColor: "#1d4e57", background: "#08222a" };
     case "free_through_harness":
       return { color: "#34d399", borderColor: "#1f5e47", background: "#0e1f18" };
     case "free_local":

@@ -98,6 +98,16 @@ pricing (handling OpenRouter's `-1` sentinel), writes only through `DbCollectorS
 `collector_runs` history. See `COLLECTORS.md` for the full contract and the checklist every new
 provider collector must satisfy.
 
+The **Gemini / Google AI Studio collector** (`collectors/gemini.ts` + `runGeminiCollector`) is
+the second real collector. It proves a distinct product claim — a **direct provider API free
+tier** (`access_type = direct_api`) — versus OpenRouter's **aggregator** free inference
+(`access_type = free_through_aggregator`). Both collectors import via the same `DbCollectorSink`
+and follow the identical failure-safety / idempotency / change-detection contract; they differ
+only in their official sources, their `free` classification rule, and how they handle limits
+(Gemini captures the published per-model TPM but stores RPM/RPD as `null` because Google does not
+publish a fixed public grid). The admin UI (CollectorRunner), CLI, and `adminRunCollector`
+action run either collector independently.
+
 ## Known limitations / future work
 - User watchlists/alerts (the earlier design draft's `user_watchlist`) are not implemented.
 - The verification queue is computed on read; for very large datasets it could be

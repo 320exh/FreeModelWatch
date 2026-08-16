@@ -492,6 +492,81 @@ export function getModelView(id: string): (ModelView & { harnessCompat: HarnessC
   };
 }
 
+/**
+ * Strip a known `provider__` prefix to get a model's canonical key. This lets us
+ * compare the same logical model across providers, e.g. `gemini-2.5-flash`
+ * (Google direct) vs `openrouter__gemini-2.5-flash` (aggregator).
+ */
+export function canonicalModelKey(id: string): string {
+  const i = id.indexOf("__");
+  return i > -1 ? id.slice(i + 2) : id;
+}
+
+export interface CrossProviderRoute {
+  availabilityId: string;
+  modelId: string;
+  modelName: string;
+  providerId: string;
+  providerName: string;
+  providerCategory: string;
+  accessType: AccessType;
+  status: string;
+  isFree: boolean;
+  inputPricePerMillion: number | null;
+  outputPricePerMillion: number | null;
+  rateLimitRpm: number | null;
+  rateLimitTpm: number | null;
+  dailyLimit: number | null;
+  requiresApiKey: boolean;
+  requiresPaymentMethod: boolean;
+  requiresSignup: boolean;
+  verificationConfidence: string;
+  lastVerifiedAt: string | null;
+}
+
+/** Free + paid routes for the same logical model across all providers. */
+export function getCrossProviderRoutes(modelId: string): CrossProviderRoute[] {
+  const key = canonicalModelKey(modelId);
+  const rows = getDb()
+    .prepare(
+      `SELECT a.id AS availability_id, m.id AS model_id, m.name AS model_name,
+              m.provider_id AS provider_id, p.name AS provider_name, p.category AS provider_category,
+              a.access_type AS access_type, a.status AS status,
+              a.input_price_per_million AS input_price_per_million, a.output_price_per_million AS output_price_per_million,
+              a.rate_limit_rpm AS rate_limit_rpm, a.rate_limit_tpm AS rate_limit_tpm, a.daily_limit AS daily_limit,
+              a.requires_api_key AS requires_api_key, a.requires_payment_method AS requires_payment_method, a.requires_signup AS requires_signup,
+              a.verification_confidence AS verification_confidence, a.last_verified_at AS last_verified_at
+         FROM availability a
+         JOIN models m ON m.id = a.model_id
+         JOIN providers p ON p.id = a.provider_id
+        WHERE (CASE WHEN instr(m.id,'__')>0 THEN substr(m.id, instr(m.id,'__')+2) ELSE m.id END) = ?
+          AND a.is_active = 1
+        ORDER BY (CASE WHEN (a.input_price_per_million = 0 AND a.output_price_per_million = 0) OR a.access_type = 'completely_free' THEN 0 ELSE 1 END), p.name`
+    )
+    .all(key) as any[];
+  return rows.map((r: any) => ({
+    availabilityId: r.availability_id,
+    modelId: r.model_id,
+    modelName: r.model_name,
+    providerId: r.provider_id,
+    providerName: r.provider_name,
+    providerCategory: r.provider_category,
+    accessType: r.access_type as AccessType,
+    status: r.status,
+    isFree: (r.input_price_per_million === 0 && r.output_price_per_million === 0) || r.access_type === "completely_free",
+    inputPricePerMillion: r.input_price_per_million,
+    outputPricePerMillion: r.output_price_per_million,
+    rateLimitRpm: r.rate_limit_rpm,
+    rateLimitTpm: r.rate_limit_tpm,
+    dailyLimit: r.daily_limit,
+    requiresApiKey: !!r.requires_api_key,
+    requiresPaymentMethod: !!r.requires_payment_method,
+    requiresSignup: !!r.requires_signup,
+    verificationConfidence: r.verification_confidence,
+    lastVerifiedAt: r.last_verified_at,
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Filtering / search
 // ---------------------------------------------------------------------------
@@ -618,6 +693,7 @@ const ACCESS_QUALITY: Record<AccessType, number> = {
   free_through_harness: 12,
   temporarily_free: 8,
   community_unofficial: 6,
+  direct_api: 20,
 };
 
 export function scoreModel(m: ModelView): ScoreBreakdown {
@@ -737,7 +813,7 @@ export function detectContradictions(): DataIssue[] {
       push("warning", "missing_source", "Availability claim has no linked source.");
     }
     const hasQuota = a.freeQuotaValue != null || a.dailyLimit != null || a.monthlyLimit != null;
-    if (!hasQuota && a.accessType !== "free_local" && a.accessType !== "free_through_harness") {
+    if (!hasQuota && a.accessType !== "free_local" && a.accessType !== "free_through_harness" && a.accessType !== "direct_api") {
       push("info", "missing_quota", "Free route has no recorded quota (value/period/daily/monthly).");
     }
   }

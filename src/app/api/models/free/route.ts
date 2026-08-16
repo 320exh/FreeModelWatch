@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 const KNOWN_ACCESS: AccessType[] = [
   "completely_free", "free_tier", "free_credits", "free_with_limits",
-  "free_through_aggregator", "free_through_harness", "free_local", "temporarily_free", "community_unofficial",
+  "free_through_aggregator", "free_through_harness", "free_local", "temporarily_free", "community_unofficial", "direct_api",
 ];
 const KNOWN_CONF: VerificationConfidence[] = ["verified", "likely", "unverified", "stale"];
 

@@ -6,6 +6,17 @@ import {
   type NormalizedModelRow,
   type NormalizedAvailabilityRow,
 } from "./openrouter";
+import {
+  GEMINI_PROVIDER_ID,
+  GEMINI_SOURCE_CATALOG_ID,
+  GEMINI_SOURCE_CATALOG_URL,
+  GEMINI_SOURCE_PRICING_ID,
+  GEMINI_SOURCE_PRICING_URL,
+  GEMINI_SOURCE_RATELIMITS_ID,
+  GEMINI_SOURCE_RATELIMITS_URL,
+  GEMINI_SOURCE_BILLING_ID,
+  GEMINI_SOURCE_BILLING_URL,
+} from "./gemini";
 import type { CollectorSink, NormalizedAvailability, CollectorResult } from "./types";
 
 function j(v: unknown): string | null {
@@ -148,6 +159,45 @@ export class DbCollectorSink implements CollectorSink {
     ).run(availabilityId, sourceId);
   }
 
+  linkSources(availabilityId: string, sourceIds: string[]): void {
+    for (const sid of sourceIds) this.linkSource(availabilityId, sid);
+  }
+
+  ensureGeminiProvider(): void {
+    const db = getDb();
+    db.prepare(
+      `INSERT OR IGNORE INTO providers
+        (id, name, category, website_url, api_docs_url, pricing_url, has_free_tier,
+         requires_payment_method, requires_signup, status, data_origin, verification_confidence, last_verified_at)
+        VALUES (?, 'Google Gemini / AI Studio', 'direct_api', 'https://aistudio.google.com', 'https://ai.google.dev/gemini-api/docs',
+         'https://ai.google.dev/gemini-api/docs/pricing', 1, 0, 1, 'available', 'live_collector', 'likely', ?)`
+    ).run(GEMINI_PROVIDER_ID, this.today);
+    db.prepare(
+      `UPDATE providers SET name='Google Gemini / AI Studio', category='direct_api', website_url='https://aistudio.google.com',
+        api_docs_url='https://ai.google.dev/gemini-api/docs', pricing_url='https://ai.google.dev/gemini-api/docs/pricing',
+        has_free_tier=1, requires_payment_method=0, requires_signup=1, status='available',
+        data_origin='live_collector', verification_confidence='likely', last_verified_at=?
+       WHERE id=?`
+    ).run(this.today, GEMINI_PROVIDER_ID);
+  }
+
+  ensureGeminiSources(): [string, string, string, string] {
+    const db = getDb();
+    const ensure = (id: string, url: string, title: string, notes: string) => {
+      db.prepare(
+        `INSERT INTO sources
+          (id, url, title, source_type, provider_id, is_verified, reliability, date_last_checked, last_checked_at, notes)
+         VALUES (?, ?, ?, 'official_docs', ?, 1, 'verified', ?, ?, ?)
+         ON CONFLICT(url) DO UPDATE SET last_checked_at=excluded.last_checked_at, date_last_checked=excluded.date_last_checked`
+      ).run(id, url, title, GEMINI_PROVIDER_ID, this.today, this.today, notes);
+    };
+    ensure(GEMINI_SOURCE_CATALOG_ID, GEMINI_SOURCE_CATALOG_URL, "Gemini API — Models", "Authoritative model list (GET /v1beta/models).");
+    ensure(GEMINI_SOURCE_PRICING_ID, GEMINI_SOURCE_PRICING_URL, "Gemini API — Pricing", "Authoritative free-of-charge tier pricing.");
+    ensure(GEMINI_SOURCE_RATELIMITS_ID, GEMINI_SOURCE_RATELIMITS_URL, "Gemini API — Rate limits", "Per-model token-rate limits; RPM/RPD are dynamic per usage tier.");
+    ensure(GEMINI_SOURCE_BILLING_ID, GEMINI_SOURCE_BILLING_URL, "Gemini API — Billing", "Free tier requires no credit card.");
+    return [GEMINI_SOURCE_CATALOG_ID, GEMINI_SOURCE_PRICING_ID, GEMINI_SOURCE_RATELIMITS_ID, GEMINI_SOURCE_BILLING_ID];
+  }
+
   upsertModelRow(m: NormalizedModelRow): { added: boolean; changed: boolean; changedFields: string[] } {
     const db = getDb();
     const existing = db.prepare("SELECT * FROM models WHERE id = ?").get(m.id) as any;
@@ -232,10 +282,11 @@ export class DbCollectorSink implements CollectorSink {
         "verification_method", "verification_confidence", "verification_notes", "data_origin", "expires_at", "verified_by",
       ];
       const params = [
-        a.id, a.modelId, a.providerId, null, a.accessType, null, null, null, null, null, null, null,
+        a.id, a.modelId, a.providerId, null, a.accessType, null, null, null,
+        a.rateLimitRpm ?? null, a.rateLimitTpm ?? null, a.dailyLimit ?? null, a.monthlyLimit ?? null,
         a.inputPricePerMillion, a.outputPricePerMillion, "USD", bool(a.requiresApiKey), bool(a.requiresPaymentMethod),
         bool(a.requiresSignup), null, a.apiFormat, null, a.status, 1, a.sourceUrl, a.sourceTitle, "official_docs",
-        this.today, "collector", "likely", a.free.reason ?? "Imported by OpenRouter collector.", "live_collector", a.expiresAt, null,
+        this.today, "collector", "likely", a.free.reason ?? "Imported by live collector.", "live_collector", a.expiresAt, null,
       ];
       db.prepare(`INSERT INTO availability (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`).run(...params);
       this.recordChange({
@@ -246,13 +297,13 @@ export class DbCollectorSink implements CollectorSink {
         newValue: `${a.accessType}/${a.status}`,
         changeSource: "automated",
         sourceUrl: a.sourceUrl,
-        notes: `Free route discovered via OpenRouter collector. ${a.free.reason}`,
+        notes: `Free route discovered via live collector. ${a.free.reason}`,
       });
       this.appendVerificationHistory({
         availabilityId: a.id,
         modelId: a.modelId,
         providerId: a.providerId,
-        verifiedBy: `collector:${OPENROUTER_PROVIDER_ID}`,
+        verifiedBy: `collector:${a.providerId}`,
         newConf: a.confidence,
         newStatus: a.status,
         notes: "Initial import by live collector.",
@@ -273,6 +324,10 @@ export class DbCollectorSink implements CollectorSink {
     cmp("requires_payment_method", existing.requires_payment_method, bool(a.requiresPaymentMethod));
     cmp("input_price_per_million", existing.input_price_per_million, a.inputPricePerMillion);
     cmp("output_price_per_million", existing.output_price_per_million, a.outputPricePerMillion);
+    cmp("rate_limit_rpm", existing.rate_limit_rpm, a.rateLimitRpm ?? null);
+    cmp("rate_limit_tpm", existing.rate_limit_tpm, a.rateLimitTpm ?? null);
+    cmp("daily_limit", existing.daily_limit, a.dailyLimit ?? null);
+    cmp("monthly_limit", existing.monthly_limit, a.monthlyLimit ?? null);
     cmp("expires_at", existing.expires_at ?? null, a.expiresAt ?? null);
 
     const wasActive = existing.is_active === 1;
@@ -292,13 +347,15 @@ export class DbCollectorSink implements CollectorSink {
 
     db.prepare(
       `UPDATE availability SET status=?, access_type=?, verification_confidence=?, requires_payment_method=?,
-        input_price_per_million=?, output_price_per_million=?, source_url=?, source_title=?, source_type=?,
+        input_price_per_million=?, output_price_per_million=?, rate_limit_rpm=?, rate_limit_tpm=?, daily_limit=?, monthly_limit=?,
+        source_url=?, source_title=?, source_type=?,
         expires_at=?, is_active=1, last_verified_at=?, verification_method='collector',
         data_origin='live_collector', verification_notes=?
        WHERE id=?`
     ).run(
       a.status, a.accessType, a.confidence, bool(a.requiresPaymentMethod), a.inputPricePerMillion,
-      a.outputPricePerMillion, a.sourceUrl, a.sourceTitle, a.sourceType, a.expiresAt ?? null, this.today,
+      a.outputPricePerMillion, a.rateLimitRpm ?? null, a.rateLimitTpm ?? null, a.dailyLimit ?? null, a.monthlyLimit ?? null,
+      a.sourceUrl, a.sourceTitle, a.sourceType, a.expiresAt ?? null, this.today,
       wantNotes, a.id
     );
     this.linkSource(a.id, sourceId);
@@ -316,14 +373,15 @@ export class DbCollectorSink implements CollectorSink {
         newValue: `${a.accessType}/${a.status}`,
         changeSource: "automated",
         sourceUrl: a.sourceUrl,
-        notes: "Free route re-appeared in the OpenRouter catalog after being removed.",
+        notes: "Free route re-appeared in the live catalog after being removed.",
       });
     } else {
-      const fieldLabel = changes.includes("status") || changes.includes("access_type") ? "status/access" : changes.join(",");
+      const hasRateLimitChange = changes.some((c) => c === "rate_limit_rpm" || c === "rate_limit_tpm" || c === "daily_limit" || c === "monthly_limit");
+      const fieldLabel = changes.includes("status") || changes.includes("access_type") ? "status/access" : hasRateLimitChange ? "rate_limit" : changes.join(",");
       this.recordChange({
         entityType: "availability",
         entityId: a.id,
-        fieldChanged: changes.includes("status") ? "status_change" : changes.includes("input_price_per_million") || changes.includes("output_price_per_million") ? "pricing_change" : "updated",
+        fieldChanged: changes.includes("status") ? "status_change" : changes.includes("input_price_per_million") || changes.includes("output_price_per_million") ? "pricing_change" : hasRateLimitChange ? "rate_limit_change" : "updated",
         oldValue: `${existing.verification_confidence}/${existing.status}`,
         newValue: `${a.confidence}/${a.status}`,
         changeSource: "automated",
@@ -335,7 +393,7 @@ export class DbCollectorSink implements CollectorSink {
       availabilityId: a.id,
       modelId: a.modelId,
       providerId: a.providerId,
-      verifiedBy: `collector:${OPENROUTER_PROVIDER_ID}`,
+      verifiedBy: `collector:${a.providerId}`,
       previousConf: existing.verification_confidence,
       previousStatus: existing.status,
       newConf: a.confidence,
@@ -348,7 +406,7 @@ export class DbCollectorSink implements CollectorSink {
 
   markRemoved(availabilityId: string, reason?: string): boolean {
     const db = getDb();
-    const existing = db.prepare("SELECT * FROM availability WHERE id = ? AND provider_id = ?").get(availabilityId, OPENROUTER_PROVIDER_ID) as any;
+    const existing = db.prepare("SELECT * FROM availability WHERE id = ?").get(availabilityId) as any;
     if (!existing || existing.is_active !== 1) return false;
     const note = reason ?? "Model no longer present in the OpenRouter live catalog.";
     db.prepare(
@@ -370,7 +428,7 @@ export class DbCollectorSink implements CollectorSink {
       availabilityId,
       modelId: existing.model_id,
       providerId: existing.provider_id,
-      verifiedBy: `collector:${OPENROUTER_PROVIDER_ID}`,
+      verifiedBy: `collector:${existing.provider_id}`,
       previousConf: existing.verification_confidence,
       previousStatus: existing.status,
       newConf: existing.verification_confidence,

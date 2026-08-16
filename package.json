@@ -9,8 +9,10 @@
     "typecheck": "tsc --noEmit",
     "lint": "next lint",
     "test": "vitest run",
-    "collect:openrouter": "tsx src/lib/collectors/cli.ts",
-    "collect:openrouter:dry": "tsx src/lib/collectors/cli.ts --dry-run"
+    "collect:openrouter": "tsx src/lib/collectors/cli.ts --collector=openrouter",
+    "collect:openrouter:dry": "tsx src/lib/collectors/cli.ts --collector=openrouter --dry-run",
+    "collect:gemini": "tsx src/lib/collectors/cli.ts --collector=gemini",
+    "collect:gemini:dry": "tsx src/lib/collectors/cli.ts --collector=gemini --dry-run"
   },
   "dependencies": {
     "next": "16.3.1",
