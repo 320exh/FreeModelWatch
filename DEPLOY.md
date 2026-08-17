@@ -76,6 +76,18 @@ flock -n data/.collect.lock npm run collect:all
 `collect:all` resolves the DB via the same cwd/`data` (or `FREEAI_DB_PATH`), so run it from
 the project root with the same env as the web server.
 
+> **Provision the persistent data directory before the scheduler runs.** The lock file is
+> `data/.collect.lock`, and `flock` opens it **before** the collector initializes the database
+> (which would otherwise create `data/`). On a completely fresh host the collector timer could
+> fire before the web app has created `data/`, and `flock` would fail. Create it once,
+> explicitly, owned by the app user:
+>
+> ```bash
+> install -d -o <app-user> -g <app-user> -m 0755 /srv/freemodelwatch/data
+> ```
+>
+> The systemd unit below also guards against this with an `ExecStartPre` `mkdir -p`.
+
 ## 6. Known limitation — cross-process route cache
 
 `buildFreeAccessRoutes()` caches results in an in-memory module singleton **inside the running
@@ -114,6 +126,50 @@ WantedBy=multi-user.target
 WorkingDirectory=/srv/freemodelwatch
 EnvironmentFile=/srv/freemodelwatch/.env.local
 Type=oneshot
+# Ensure the persistent data directory exists BEFORE flock opens the lock file,
+# so a fresh-host timer tick can never fail on a missing data/ dir.
+ExecStartPre=/usr/bin/mkdir -p /srv/freemodelwatch/data
 ExecStart=/usr/bin/flock -n /srv/freemodelwatch/data/.collect.lock /usr/bin/npm run collect:all
 ExecStartPost=/usr/bin/systemctl restart freeai
 ```
+
+**Restart semantics (matches the route-cache boundary in §6):** for a `Type=oneshot` unit,
+`ExecStartPost` runs **only if** `ExecStart` (the `flock` + `collect:all` command) exits
+**0**. So:
+- a **successful/partial** collect (exit 0) → `freeai` is restarted, clearing the stale
+  in-memory route cache;
+- a **failed** collect (non-zero) or a **locked-out** `flock -n` (non-zero) → the unit is
+  marked failed and **`freeai` is NOT restarted**.
+
+This gives the exact documented behavior: refresh the web cache on success, do not churn it
+on failure. The timer just needs the service name; a `.timer` unit like:
+
+```ini
+[Unit]
+Description=FreeModelWatch collector timer
+[Timer]
+OnCalendar=hourly
+Persistent=true
+[Install]
+WantedBy=timers.target
+```
+
+Enable both the timer and the web service with `systemctl enable --now freeai.timer freeai`.
+
+## 8. Post-deploy validation
+
+Run the deployment smoke test against the live instance (from the project root on the host,
+with the same env as the app — it never prints secret values):
+
+```bash
+npm run smoke:deploy -- --base-url http://localhost:3000
+# fuller run (runs the collector + exercises web restart; supply the plaintext admin password to
+# verify a successful login):
+SMOKE_ADMIN_PASSWORD='<admin password>' npm run smoke:deploy -- --base-url https://<domain> --collector --restart
+```
+
+It reports PASS/FAIL/SKIP for: required/optional env config, public endpoint availability,
+DB readability, unauthenticated admin rejection (401), admin auth with valid/invalid
+credentials (when `SMOKE_ADMIN_PASSWORD` is set), the `collect:all` exit-code contract
+(`--collector`), systemd unit/timer structure and activity (`--unit freeai`), and DB
+persistence across a web restart (`--restart`). Non-destructive by default.

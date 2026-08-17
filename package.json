@@ -13,7 +13,8 @@
     "collect:openrouter:dry": "tsx src/lib/collectors/cli.ts --collector=openrouter --dry-run",
     "collect:gemini": "tsx src/lib/collectors/cli.ts --collector=gemini",
     "collect:gemini:dry": "tsx src/lib/collectors/cli.ts --collector=gemini --dry-run",
-    "collect:all": "tsx scripts/collect-all.ts"
+    "collect:all": "tsx scripts/collect-all.ts",
+    "smoke:deploy": "tsx scripts/deploy-smoke.ts"
   },
   "dependencies": {
     "next": "16.3.1",
