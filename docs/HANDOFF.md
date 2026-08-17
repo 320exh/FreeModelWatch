@@ -1,9 +1,9 @@
 # FreeModelWatch — AI Development Handoff
 
 > **Status:** Continuity document for developers and AI coding agents.
-> Written 2026-08-16 against the HEAD of `main` (commit `ceef6a0`).
-> Everything below was verified directly against the repository, not inferred.
-> Read it fully before touching any code.
+> Last revised 2026-08-16 against HEAD `c89aa57` (the HANDOFF-update commit, one ahead
+> of `ceef6a0` which added admin auth + CSRF). Everything below was verified directly
+> against the repository, not inferred. Read it fully before touching any code.
 
 ---
 
@@ -420,7 +420,7 @@ time).
 | `/best` | `src/app/best/page.tsx` | Ranked sections (coding/reasoning/vision/long-context/OpenCode/Claude Code/no-card/aggregators) + interactive "Find a free model for your task" recommendation box (`recommendFreeAccess`). |
 | `/changes` | `src/app/changes/page.tsx` | Change feed categorized by `CHANGE_CATEGORY_META`; filter by category. |
 | `/compare` | `src/app/compare/page.tsx` | Client-side comparison tool; fetches `/api/models/free`, lets you pick up to 6 models and renders a property matrix. |
-| `/admin` | `src/app/admin/page.tsx` | Verification queue (with per-route verify forms), contradiction table, data-quality transparency, "Live Collectors" (CollectorRunner + run history), "Add free-access route", "Report a change" moderation form. **Unauthenticated** (see section 14). |
+| `/admin` | `src/app/admin/page.tsx` | Verification queue (with per-route verify forms), contradiction table, data-quality transparency, "Live Collectors" (CollectorRunner + run history), "Add free-access route", "Report a change" moderation form. **Protected** by HTTP Basic Auth in `middleware.ts` (matcher `/admin/:path*` → `verifyBasicAuth`). |
 | `/api-docs` | `src/app/api-docs/page.tsx` | Static JSON API documentation. |
 | `/robots.txt` | `src/app/robots.ts` | Allow the public entity pages; disallow `/admin`, `/api/`, `/compare`. |
 | `/sitemap.xml` | `src/app/sitemap.ts` | Dynamic sitemap from DB data. |
@@ -468,11 +468,15 @@ freshness/limits/provenance flags.
 
 **`POST /api/admin/collect/openrouter`** and **`POST /api/admin/collect/gemini`** —
 run a collector; `?dryRun=1` to dry-run. `GET` on the same route returns last 20 runs.
-**These are administrative mutation endpoints with no auth** (section 14).
+**Protected:** both `POST` handlers call `verifyBasicAuth` (HTTP Basic) *and*
+`validateSameOrigin` (same-origin CSRF check). `GET` (run history) is unauthenticated
+(read-only, non-mutating) — see section 14.
 
 **Mutations (server actions, `src/lib/actions.ts`, no HTTP route):** `markVerified`,
 `adminVerifyRoute`, `addAvailability`, `reportChange`, `adminRunCollector`. Invoked
-from forms via Next server actions. **Unauthenticated.**
+from forms via Next server actions. **Protected:** every mutating action begins with
+`requireAdmin()` → `verifyBasicAuth`. Next.js also enforces framework-level same-origin
+CSRF protection for server actions.
 
 **Serialization (`src/lib/api.ts`):** `serializeModelView` shapes every `ModelView`
 into the wire format; internal-only fields (e.g. `verificationNotes`) are intentionally
@@ -525,11 +529,11 @@ These are **load-bearing** invariants across the codebase. Do not weaken them.
 
 ---
 
-## 11. Known Current State  (verified at HEAD `ceef6a0`)
+## 11. Known Current State  (verified at HEAD `c89aa57`)
 
 | Item | Value (verified) |
 |---|---|
-| Branch / HEAD | `main`; latest commit `ceef6a0` (2026-08-16, "feat: harden admin authentication and CSRF protection") |
+| Branch / HEAD | `main`; HEAD `c89aa57` (docs), latest app commit `ceef6a0` (2026-08-16, "feat: harden admin authentication and CSRF protection") |
 | Node / npm | v24.16.0 / 11.17.0 |
 | Test run | 15 files, **189 tests passed** (`npm run test`, in-memory seeded DB) |
 | Typecheck | `npm run typecheck` passes |
@@ -553,14 +557,32 @@ openrouter live_collector 19 · openrouter seed 10 · google live_collector 9 ·
 perplexity seed 1 · qwen seed 1 · together seed 12
 ```
 
-**Caveats observed**
+**Caveats observed (verified at HEAD `c89aa57`)**
 - `src/lib/collectors/actions.ts` is duplicate dead code (un-used `DbCollectorSink`,
   OpenRouter-hardcoded attribution).
-- `invalidateRouteCache()` is defined but never called; `buildFreeAccessRoutes` holds a
-  module-level cache (`_routeCache`) that nothing refreshes. In `force-dynamic` (fresh
-  per-request) mode this is mostly invisible, but a long-lived process could serve
-  stale route sets after writes until restart.
-- `/admin` and all POST wrappers are unauthenticated (`ADMIN_SECURITY` lane for deploy).
+- **Route-cache invalidation is a real (if bounded) correctness gap.** `buildFreeAccessRoutes`
+  caches its result in module state (`_routeCache`, `intelligence.ts:119`) and only
+  recomputes when called with `force` or after `invalidateRouteCache()`. `invalidateRouteCache()`
+  is **never called anywhere**; `revalidatePath` (used by server actions) refreshes
+  Next's render cache but does **not** clear `_routeCache`. `force-dynamic` does **not**
+  eliminate this: it controls per-request render caching, but the module-level cache
+  survives across requests inside one Node process. In `next dev` the module reloads
+  often, so staleness is short; in a long-lived `next start` + automated collectors
+  (Architecture A), a collector write can be followed by stale `/free`, `/best`,
+  `/models`, `/compare` responses until the process restarts. This becomes **more
+  important** once scheduled collectors run on the same machine. Fix belongs on the
+  write path (collector sink / actions should call `invalidateRouteCache()` after a
+  successful mutation) — see the scheduler section.
+- **Admin authentication IS implemented** (correcting an earlier draft of this HANDOFF).
+  `middleware.ts` gates `/admin/*` with HTTP Basic Auth; all mutating server actions call
+  `requireAdmin()`; both collect-API `POST` handlers call `verifyBasicAuth` **and**
+  `validateSameOrigin` (CSRF). Remaining gaps: auth depends on `ADMIN_PASSWORD_HASH`
+  being set (without it every admin call 401s, which is safe but must be documented for
+  deploy); `getPasswordHash()` throws if the header is present but the hash env is unset
+  (returns 500 instead of 401 in that edge case); the collect `GET` run-history endpoints
+  are unauthenticated (non-mutating). The stale comment block at `actions.ts:56-62`
+  ("server actions, not authenticated endpoints … not implemented yet") is **wrong** and
+  must be deleted when that file next changes.
 - The OpenRouter collector's last run discovered **413** models but only 19 classified
   free — the `-1`/sentinel and paid rules are doing their job.
 - `server.err` is empty/ignored (`gitignored`).
@@ -651,14 +673,33 @@ go through `MIGRATIONS` + a test.
 - **No user accounts / subscriptions.** `watchlist` table doesn't exist.
 - **Only two live provider collectors** (OpenRouter, Gemini). OpenAI/Anthropic/etc.
   have **seed/demo data only**; the example `OpenAICollector` is a stub.
-- **No production authentication.** `/admin`, all mutating server actions, and both
-  admin collect endpoints are unauthenticated. Documented path exists (gate
-  `requireAdmin()`, derive `verified_by` from session) but not implemented.
-- **Anonymous routes** — entity pages are public.
-- **Search-facets duplication in DB** — the collector `id` may collide with seed ids for
-  Google (`gemini-2.5-flash` etc.), meaning a Google run can overwrite a seed route's
-  provenance flags. (Verified: after the Gemini run, `data/freeai.db` shows Google
-  routes as `live_collector`, including the seed-era ones.)
+- **Authentication is implemented (correcting an earlier draft).** HTTP Basic Auth +
+  same-origin CSRF is enforced on `/admin`, all mutating server actions, and both collect
+  `POST` endpoints (commit `ceef6a0`). What remains: deploy must set `ADMIN_PASSWORD_HASH`;
+  the `verifyBasicAuth` throws (→ 500) rather than 401 when a Basic header is present but
+  the hash env is unset; collect `GET` run-history is unauthenticated; the stale
+  "not implemented yet" comment at `actions.ts:56-62` contradicts the code and should be
+  removed on next touch. There is **no user/session model** — Basic Auth only; `verified_by`
+  is derived from the Basic username, not a session.
+- **Anonymous routes** — entity pages (`/free`, `/models`, `/best`, etc.) and the read
+  API are public by design.
+- **Gemini/seed identity reconciliation (intentional, but with a provenance-downgrade
+  side effect — verified).** Direct-vendor models intentionally use **unprefixed** ids
+  (`gemini-2.5-flash`, `gemma-4`) so the seed and the Gemini collector share the same
+  `model_id` and availability PK `${modelId}__google`. After a Gemini run the DB shows all
+  9 `google` availability rows as `data_origin='live_collector'`, `verification_confidence='likely'`
+  — i.e. the collector's write **replaced** the seed's provenance. This is **not** a bug
+  where seed data masquerades as live data; rather the *opposite* is true and is by design
+  (live collector supersedes demo seed). The genuine, subtler issue: the sink
+  **unconditionally overwrites `data_origin`/`verification_confidence`** on every run, so a
+  human-**verified** seed (`confidence='verified'`) is *downgraded* to auto-`likely`, and
+  the seed's more specific limits (RPM/daily) are replaced by the collector's TPM-only
+  transcription. No cross-provider collision occurs (verified: zero duplicate availability
+  PKs; OpenRouter uses the `openrouter__` prefix so it never collides with `google`).
+  **Resolved (see §14c):** the sink must preserve higher-confidence human-verified
+  provenance while still updating observed facts, and model/availability identity stays
+  **shared** with seed. New direct-vendor collectors must reuse the **same unprefixed id
+  scheme as their seed rows** or they will create duplicate models instead of reconciling.
 - **The `modelsRemoved` report counter is always 0** — the removal loop only deactivates
   availability *routes* (`markRemoved` on the row), never the `models` table itself, so a
   model disappearing entirely is not counted as a removed model.
@@ -667,153 +708,288 @@ go through `MIGRATIONS` + a test.
 
 ---
 
-## 14a. Automated Scheduler Architecture Assessment (NEW — 2026-08-16)
+## 14a. Deployment & Scheduler — Critical Re-Review (2026-08-16)
 
-The next planned phase ("Automated Free-Model Monitoring") requires deciding **where the scheduler runs**. The current architecture has a critical constraint:
+This section replaces the earlier `14a` + `16` with a single, reconciled view. The
+previous draft conflated two separate questions — **where the database lives** (a
+persistence/deployment decision) and **where collectors execute** (a scheduling
+decision) — and prematurely presented a `collect-all.ts` + cron recipe as if approved.
+Both are kept explicitly separate below. Nothing here is approved implementation; the
+`scheduler`/`monitoring` phase remains **design-first** until the open decisions are
+closed.
 
-### SQLite is a local file — GitHub Actions does NOT work for this architecture
+### Already decided (verified architectural facts — do not reverse casually)
 
-| Problem | Details |
-|---------|---------|
-| **SQLite is local file** | `data/freeai.db` lives on the deployment machine's disk |
-| **`data/` is gitignored** | Not in version control |
-| **No shared DB server** | No external DB (PostgreSQL, Turso, PlanetScale, Neon) |
-| **Vercel is stateless** | Cannot receive DB updates from Actions runner |
+- **Single SQLite file is the datastore.** `data/freeai.db`, one cached `DatabaseSync`
+  on `globalThis`, every query funnels through `getDb()`. Verified at HEAD: `journal_mode`
+  is `delete` (the default rollback journal, **not WAL**) and there is **no** `collect-all`
+  script/process and **no** GitHub Actions workflow in the repo.
+- **Collectors never touch SQLite directly**; all writes go through `DbCollectorSink`
+  (`src/lib/collectors/dbSink.ts`). This is the write trust boundary.
+- **Read/write separation is the auth seam.** `queries.ts` reads only; `actions.ts` +
+  `dbSink.ts` write only. Any auth drop-in attaches at those two write points.
+- **Solo-developer, read-mostly product.** Most traffic is anonymous reads over one
+  SQLite file; writes are rare (admin verify, collector runs).
 
-**Running collectors on GitHub Actions would update a throwaway database that disappears when the workflow ends. The production app would never see those changes.**
+### Verified constraints (imposed by the current code, not preferences)
 
-### Recommended Architecture
+- **SQLite is a local file on the deployment machine.** `data/` is gitignored; there is
+  no external DB server. A separate, stateless runner (e.g. a GitHub Actions worker) has
+  an ephemeral filesystem and **cannot** mutate the production app's database. This is a
+  hard constraint on *where collectors may execute* — they must run where the file lives
+  (or against a DB reachable over the network from the same deployment).
+- **Single-writer concurrency.** With `journal_mode=delete`, SQLite allows one writer at
+  a time; concurrent writers get `SQLITE_BUSY`. The collectors also do check-then-act
+  diffing (read `currentActive`, then mutate), so two batches racing on the same file are
+  unsafe, not merely slow.
+- **`buildFreeAccessRoutes` caches in module state** (`_routeCache`) and is never
+  invalidated; `force-dynamic` does not clear it. See the cache caveat in §11.
+- **Write frequency is low.** Two collectors today; cadence will be hourly-at-most. This
+  is tiny relative to any managed DB, so external-DB scale is **not** a driver.
 
-| Deployment Target | Scheduler Solution |
-|-------------------|-------------------|
-| **Linux VPS / bare metal / Docker** | Native `cron` / `systemd timer` / supercronic sidecar — runs on **same machine** as Next.js app, shares `data/freeai.db` |
-| **Windows Server** | Windows Task Scheduler |
-| **Vercel / serverless** | **Not compatible** with local SQLite — would need external DB (Turso/libSQL, Neon, PlanetScale) first, then GitHub Actions cron becomes viable |
+### Deployment / persistence: where should the authoritative DB live?
 
-### Implementation Plan (for Linux/VPS/Docker deployment)
+**Recommendation (architectural preference, not yet a closed decision): Architecture A —
+a single persistent machine running Next.js + SQLite + the collector process.** It fits
+every verified constraint above: trivial ops for a solo dev, zero new infra, preserves
+the existing `getDb()`/SQLite design verbatim, and keeps collectors co-located with the
+data they write. Architecture B (Vercel/serverless + external DB + GitHub Actions) is
+*technically* viable but only by first replacing the entire datastore layer (`db.ts`,
+the `DatabaseSync` connection, migrations, `getDb()`) and accepting that "viewer" and
+"writer" become two deployments sharing one hosted DB — a meaningful jump in complexity
+and cost for a read-mostly solo project whose only write path is the collector.
 
-1. **Add `scripts/collect-all.ts`** — sequential runner:
-   ```typescript
-   import { runOpenRouterCollector, runGeminiCollector, formatRunReport } from "@/lib/collectors/run";
-   
-   async function main() {
-     const openRouterReport = await runOpenRouterCollector({ dryRun: false });
-     console.log(formatRunReport(openRouterReport));
-     if (openRouterReport.status === "failed") process.exit(1);
-     
-     const geminiReport = await runGeminiCollector({ dryRun: false });
-     console.log(formatRunReport(geminiReport));
-     if (geminiReport.status === "failed") process.exit(1);
-   }
-   main();
-   ```
+| Driver | Architecture A (persistent + SQLite) | Architecture B (serverless + external DB) |
+|---|---|---|
+| Preserves current SQLite code | ✅ unchanged | ❌ must replace `db.ts` + `getDb()` |
+| Ops burden for solo dev | low (one box) | higher (hosted DB + 2 deploy targets) |
+| Collectors co-located w/ data | ✅ same machine | ✅ via shared hosted DB |
+| Cost | ~free (small VPS) | hosted-DB bill |
+| Future monitoring ambitions | sufficient (low write rate) | over-specified |
 
-2. **Add npm script** to `package.json`:
-   ```json
-   "collect:all": "tsx scripts/collect-all.ts"
-   ```
+**Deployment decision (RESOLVED — see §14c):** a single **persistent Linux host running
+`next start` (Node ≥ 22.5)** with the SQLite file on the host's persistent disk and the
+OS scheduler co-located. This choice affects *only* the scheduler command syntax, not the
+application, and requires no new repo config.
 
-3. **Document cron setup** in `README.md` / `DEPLOYMENT.md`:
-   ```bash
-   # Hourly - adjust path to your deployment
-   0 * * * * cd /path/to/FreeModelWatch && /usr/bin/npm run collect:all >> /var/log/freemodelwatch-collect.log 2>&1
-   ```
+### Scheduler: where should automated collectors execute?
 
-### Why NOT GitHub Actions?
+**Recommendation:** on the same machine that hosts the authoritative DB (Architecture A),
+driven by the OS scheduler (cron / systemd timer on Linux; Task Scheduler on Windows). A
+long-lived in-process `setInterval` inside the Next server is a viable *candidate* but is
+coupled to the server's lifetime and harder to monitor/log; an external scheduler process
+is preferred for observability. GitHub Actions is explicitly **not** suitable for the
+current local-SQLite architecture (see constraint above) — it only becomes viable under
+Architecture B, which is not recommended for this project's scale.
 
-1. **Cannot persist SQLite changes to production** — Actions runner has ephemeral filesystem
-2. **No shared database** — Would need external DB (Turso/Neon) first
-3. **Parallel execution risk** — Both collectors query `currentActive` at start; racing on same DB file needs inter-process locking (not implemented)
-4. **Deployment target undefined** — Current architecture assumes single-machine SQLite
+### Collector concurrency & failure contract (verified from `run.ts` + `dbSink.ts`)
+
+- **Two collectors are independent.** `runOpenRouterCollector` and `runGeminiCollector`
+  each return a `CollectorRunReport` with `status: 'success' | 'partial' | 'failed'`. There
+  is currently **no** orchestrator that runs both; the earlier `collect-all.ts` sketch was
+  a *proposal*, not code, and its `if failed → process.exit(1)` between collectors was
+  wrong: it would let one collector's failure abort the next.
+- **Correct batch contract:** run all collectors; **one collector failing must not
+  prevent the others from running.** Aggregate the per-collector reports; the batch
+  succeeds (exit 0) unless **any** collector reported `failed` (a `failed` run wrote *no*
+  rows — see failure-safety in §6 — so it is the only status that should fail the batch;
+  `partial` means some writes succeeded and should be reported but not fail the whole
+  batch). This preserves failure isolation *and* gives cron a meaningful non-zero exit
+  when real work was lost.
+- **Overlap / locking invariant:** **At most one collector batch may mutate the
+  authoritative database at a time.** A single `collect-all` process is internally
+  sequential, but nothing today prevents *two OS processes* (an overlapping cron tick, or
+  a manual CLI run during a scheduled one) from writing concurrently. Two candidate guards
+  **mechanism (RESOLVED — see §14c): `flock` on a dedicated lock file** wrapping the
+  scheduler command — lives entirely outside app code and is crash-safe. A DB-based
+  `collector_runs` lock row was rejected (stale-lock-on-crash handling required). The
+  invariant itself is settled; `collector_runs` remains the audit trail, not the mutex.
+
+### Route-cache invalidation must travel with the write path
+
+Because scheduled collectors make the cache-staleness gap real (see §11), the fix belongs
+on the mutation side: `DbCollectorSink` (and the server actions) should call
+`invalidateRouteCache()` after a successful mutation, so the next read rebuilds
+`_routeCache` from the freshly written rows. `revalidatePath` alone is insufficient.
+
+### Candidate approaches (NOT selected; listed so they are not mistaken for decisions)
+
+- **`scripts/collect-all.ts` + `collect:all` npm script + cron line** — the natural
+  realization of Architecture A once the deployment host and lock mechanism are chosen.
+  Still a candidate, **not** approved.
+- **In-process `setInterval` scheduler** inside `next start` — simpler to deploy, weaker
+  to observe; viable only if the process is guaranteed always-on.
+- **Architecture B (external DB + GitHub Actions cron)** — only if deployment must be
+  serverless; not recommended for this project's scale.
+
+### Future implementation
+
+**Phase 1 — DONE (implemented 2026-08-16):**
+1. `collect-all.ts` (sequential, failure-isolated, exit-code contract) + `npm run collect:all`.
+2. `invalidateRouteCache()` wired into **every** route-affecting write path:
+   - `DbCollectorSink` (`upsertModelRow`, `upsertAvailabilityRow`, `markRemoved`);
+   - server actions: `markVerified`, `adminVerifyRoute`, `addAvailability`.
+   `reportChange` intentionally does **not** invalidate (it writes only `change_history`,
+   which `buildFreeAccessRoutes`/`recommendFreeAccess` do not consume), and `adminRunCollector`
+   relies on the collectors' own invalidation (so dry-run/no-op runs don't invalidate).
+3. §14c provenance-preservation rule implemented in `DbCollectorSink.upsertAvailabilityRow`
+   (and `markRemoved` honors the `production` edge case).
+   Tests: `sink-provenance.test.ts`, `collect-all.test.ts`, `actions-route-cache.test.ts`.
+
+**Not yet done:**
+4. Deploy ops: wrap the scheduler command in `flock -n data/.collect.lock npm run collect:all`
+   and add the systemd-timer/cron unit on the Linux VPS. (App code complete; this is ops config.)
+5. Notification layer (`watch_entries` + events from `getNewlyFree`/`getRecentlyRemoved`).
+6. New direct-vendor collectors (Anthropic, Groq, DeepSeek, …) reusing the **unprefixed
+   id scheme** so they reconcile with seed rows (see §14).
+
+**All three architecture decisions are now closed and implemented (items 1–3 above).**
+The application code needs no change to deploy on the chosen host.
 
 ---
 
-The next major phase is **Automated Free-Model Monitoring** with the following shape
-(design first, then implementation):
+## 14b. Future Monitoring Vision (design-only)
+
+The longer-term "Automated Free-Model Monitoring" shape (design first, then code):
 
 ```
-Scheduler
-  → collectors (OpenRouter, Gemini, more)
-  → validation / failure safety
-  → change detection
-  → persisted events
-  → notifications
+Scheduler → collectors → validation/failure-safety → change detection
+         → persisted events (collector_runs / change_history) → notifications
 ```
 
-**Do not implement this phase unless explicitly asked.** The architecture needs to be
-designed before code: where the scheduler lives (in-process `setInterval`? a cron job
-separate process? a Vercel/serverless cron), how the notifications are delivered
-(email/webhook/in-app "watchlist"), and how the "_newly free_ / _removed_" feed
-turns into "a user subscribed to model X was notified".
-
-Existing seams that already support it:
-- `collector_runs` already records every run for audit.
-- `change_history` already records `detection` with `change_category` semantics.
-- `getNewlyFree` / `getRecentlyRemoved` extract monitorable events from history.
-- The `change_source = 'automated'` rows are distinct from manual entries.
+Existing seams already support it: `collector_runs` audits every run; `change_history`
+records `change_category`; `getNewlyFree` / `getRecentlyRemoved` extract monitorable
+events; `change_source='automated'` rows are distinct from manual. Delivery mechanism
+(email / webhook / in-app watchlist) is an open product decision, not an architecture
+blocker.
 
 ---
 
-## 16. Proposed Next Steps (staged, solo-developer friendly)
+## 14c. Closed Architecture Decisions (2026-08-16)
 
-**Prerequisite decision:** Confirm deployment target before implementing scheduler.
+The three decisions left open in the prior pass are now closed with evidence from the
+repository. Each is recorded as a settled decision, not a proposal. No application code
+was changed to close them.
 
-| Target | Scheduler Approach |
-|--------|-------------------|
-| Linux VPS / Docker / bare metal | Native `cron` / `systemd timer` / supercronic sidecar (Option A below) |
-| Windows Server | Windows Task Scheduler |
-| Vercel / serverless | **Blocked** — must migrate to external DB first (Turso, Neon, PlanetScale), then GitHub Actions cron |
+### Decision 1 — Deployment / persistence host
 
-### Option A: Native OS Scheduler (if deploying to Linux/VPS/Docker)
+- **Decision:** Deploy as a **single persistent Linux host running `next start` (Node ≥
+  22.5)** with the SQLite file (`data/freeai.db`) on the host's persistent local disk, and
+  the OS scheduler (systemd timer preferred, cron acceptable) co-located on the same host.
+- **Why this is the correct fit:** It matches every assumption the code already makes and
+  adds **zero** new repository configuration. The app writes to a local SQLite file, needs
+  a long-lived process (all pages are `force-dynamic` and call `getDb()` at request time),
+  and the scheduler must touch that same file — so viewer and writer must share one
+  machine/filesystem. For a solo, read-mostly project with hourly-at-most writes, a small
+  VPS is the simplest thing that works.
+- **Evidence from the repo:**
+  - `db.ts` opens `new DatabaseSync(DB_PATH)` with `DB_PATH` defaulting to `data/freeai.db`
+    (`FREEAI_DB_PATH`), and `createConnection()` does `mkdirSync(DB_DIR)` — so it **requires
+    a writable, persistent filesystem** at the default path.
+  - `node:sqlite` (builtin, used directly) requires **Node ≥ 22.5**; the project runs
+    Node 24. This rules out runtimes that lack a full Node + writable FS (e.g. Vercel
+    serverless/edge and ephemeral Filesystem-limited PaaS for the *app+DB* combo).
+  - `next.config.ts` is **empty** (no `output: 'standalone'`) and there is **no Dockerfile**
+    or any deploy manifest in the repo — so the path of least resistance is a plain
+    `next start`, not a containerized build pipeline that does not exist yet.
+  - `data/` and `.env*` are gitignored; `.env.example` documents `ADMIN_PASSWORD_HASH` and
+    optional `GEMINI_API_KEY`/`FREEAI_DB_PATH`. A host just needs those env vars set.
+  - `journal_mode` is `delete` (verified) — fine for a single-machine single-writer.
+- **Alternatives considered and rejected:**
+  - **Docker on a VPS / Fly.io persistent VM:** viable and reproducible, but adds a build
+    layer, an image, and (for `next start`) ideally `output:'standalone'` — none of which
+    exist today. Rejected as *more* than the project needs; can be adopted later without
+    app changes if desired.
+  - **Vercel / serverless + external DB (Architecture B):** requires replacing the entire
+    `db.ts`/`getDb()` datastore and accepting two deploy targets. Over-specified for this
+    scale; explicitly not chosen.
+  - **`next export`/static host:** impossible — pages are dynamic and read SQLite.
+- **Caveats:** the host must be **always-on** (not a sleep-suspending instance) so the
+  scheduler fires and the DB stays warm; the `data/` volume must be backed up. If the
+  deploy is ever Windows, the scheduler section's `flock` must be swapped (see Decision 2).
+- **Implementation implications:** none for app code. Ops only: provision a Linux VPS,
+  `npm ci && npm run build`, run `npm run start` behind a reverse proxy (Caddy/nginx) with
+  TLS, set `.env.local` (`ADMIN_PASSWORD_HASH`, optionally `GEMINI_API_KEY`,
+  `SITE_URL`), ensure `data/` persists, and add the systemd timer/cron line.
 
-1. **Add `scripts/collect-all.ts`** — sequential runner:
-   ```typescript
-   import { runOpenRouterCollector, runGeminiCollector, formatRunReport } from "@/lib/collectors/run";
-   
-   async function main() {
-     const openRouterReport = await runOpenRouterCollector({ dryRun: false });
-     console.log(formatRunReport(openRouterReport));
-     if (openRouterReport.status === "failed") process.exit(1);
-     
-     const geminiReport = await runGeminiCollector({ dryRun: false });
-     console.log(formatRunReport(geminiReport));
-     if (geminiReport.status === "failed") process.exit(1);
-   }
-   main();
-   ```
+### Decision 2 — Single-writer lock mechanism
 
-2. **Add npm script** to `package.json`:
-   ```json
-   "collect:all": "tsx scripts/collect-all.ts"
-   ```
+- **Decision:** Enforce the "at most one collector batch mutates the DB at a time" invariant
+  with **`flock` on a dedicated lock file (`data/.collect.lock`) wrapping the scheduler
+  command**: `flock -n data/.collect.lock npm run collect:all`. No in-app lock.
+- **Why this is the correct fit:** It is crash-safe, requires **no application code**, and
+  serializes overlapping scheduler ticks out of the box. `journal_mode=delete` already
+  serializes physical writes, but the collectors do **logical** check-then-act diffing
+  (read `currentActive`, then mutate), so a logical mutex around the whole batch is still
+  needed; `flock` provides exactly that at the OS level.
+- **Evidence from the repo:**
+  - `run.ts` reads `SELECT * FROM availability WHERE provider_id=? AND data_origin='live_collector' AND is_active=1` and then writes diffs in `DbCollectorSink` — a classic read-modify-write race if two batches run concurrently.
+  - `db.ts` `journal_mode=delete` → concurrent writers get `SQLITE_BUSY`; SQLite does **not**
+    provide a cross-process logical lock for the diffing step.
+  - No scheduler/cron/`collect-all` exists today; the lock is therefore a property of the
+    (future) scheduler command, not the app.
+- **Alternatives considered and rejected:**
+  - **`collector_runs` lock row / advisory flag:** would live in the same SQLite the batches
+    write to, so it inherits the same single-writer constraint it is trying to guard, and a
+    crashed batch would leave a **stale lock** requiring TTL/heartbeat cleanup logic. More
+    code, more failure modes, no crash-safety benefit. Rejected.
+  - **In-process `setInterval` mutex:** only guards one process; does not stop a manual CLI
+    run or a second container from racing. Insufficient alone.
+- **Caveats:** `flock` is native on Linux/macOS/BSD; a **Windows** deployment would need a
+  PowerShell/file-exists guard or a named-mutex wrapper instead (note in the scheduler docs).
+  Use `-n` (non-blocking) so an overlapping tick fails fast and is logged rather than
+  queuing. The lock file must live on the **same persistent filesystem** as the DB (`data/`).
+- **Implementation implications:** none for app code — `collect-all.ts` now exists
+  (see `scripts/collect-all.ts`), so the `flock` wrapper is simply added to the scheduler
+  unit/cron line at deploy time: `flock -n data/.collect.lock npm run collect:all`.
+  `collector_runs` stays purely an audit log.
 
-3. **Document cron setup** in `README.md` / `DEPLOYMENT.md`:
-   ```bash
-   # Hourly - adjust path to your deployment
-   0 * * * * cd /path/to/FreeModelWatch && /usr/bin/npm run collect:all >> /var/log/freemodelwatch-collect.log 2>&1
-   ```
+### Decision 3 — Gemini/seed provenance behavior
 
-4. **Verify in clean container** before deploying:
-   ```bash
-   docker run --rm -v $(pwd):/app -w /app node:24 bash -c "npm ci && npm run collect:all"
-   ```
-
-### Option B: External DB + GitHub Actions (if staying on Vercel)
-
-1. Provision Turso (libSQL) or Neon PostgreSQL
-2. Update `db.ts` to connect via HTTP/WebSocket
-3. Set `DATABASE_URL` in Vercel + GitHub Actions secrets
-4. Then GitHub Actions cron workflow can run collectors against shared DB
-
-### Staged Implementation Order (after deployment target chosen)
-
-1. **Scheduler skeleton** — add `collect-all.ts` + `collect:all` script + cron docs
-2. **Lock/guard** — add simple mutex in `collector_runs` to prevent overlapping runs
-3. **Notification layer** — introduce `watch_entries` table; emit events from `getNewlyFree`/`getRecentlyRemoved` (already implemented)
-4. **New-provider collectors** — Anthropic (check if free tier exists), Cloudflare Workers AI, Groq, DeepSeek — each as new `Collector` + `run<Provider>Collector`
-5. **Auth** — gate `/admin` and mutating actions; record `verified_by` from session
-
-**Do not implement until deployment target is confirmed.** The architecture of the scheduler depends entirely on where the SQLite file lives.
+- **Decision:** **Model identity and availability identity stay shared** with seed (direct-
+  vendor models keep **unprefixed** ids; availability PK stays `${modelId}__${providerId}`).
+  On collector upsert the sink **updates all observed facts** (status, access type, prices,
+  limits, `last_verified_at`, sources, notes, `is_active`) but **must NOT downgrade existing
+  human-attested provenance**: if the existing row's `data_origin` is `production`
+  (admin-verified) it is **kept** (and `verified_by` preserved); and `verification_confidence`
+  is set to the **higher** of the existing and the collector's confidence
+  (`verified > likely > unverified > stale`), never lowered. Seed-origin rows
+  (`data_origin='seed'`) may still be promoted to `live_collector` as today, since the
+  collector is the live authority for demo-seeded routes.
+- **Why this is the correct fit:** It eliminates the provenance *downgrade* verified earlier
+  (a human-`verified` seed route was being overwritten to auto-`likely`/`live_collector` on
+  every Gemini run) while keeping a single source of truth per logical model — no duplicate
+  models, and future direct-vendor collectors follow the identical rule. Observed facts are
+  always current; only the *attestation* is preserved when a human already stood behind it.
+- **Evidence from the repo:**
+  - `gemini.ts` `normalizeModel` deliberately uses `modelId = externalId` (unprefixed) "to
+    match seed google model ids"; `availId = ${modelId}__google`. Verified in `data/freeai.db`:
+    all 9 `google` rows are `live_collector`/`likely` after a Gemini run, and seed rows such
+    as `gemini-2.0-flash` were `confidence='verified'`.
+  - `dbSink.ts` `upsertAvailabilityRow` unconditionally sets `data_origin='live_collector'`,
+    `verification_confidence=a.confidence` (`'likely'`), `verified_by='collector:${providerId}'`
+    on every run — this is the downgrade to fix. `models` has **no** `data_origin` column, so
+    only availability provenance is affected.
+  - `upsertModelRow` does not touch provenance (model-level) — identity reconciliation is
+    already correct and unchanged.
+- **Alternatives considered and rejected:**
+  - **Always overwrite seed with `live_collector`/`likely` (current behavior):** downgrades
+    human verification to auto — rejected (the verified bug).
+  - **Keep seed entirely and never let the collector touch seed-model rows:** would create
+    two competing rows per model (seed + live) and break the cross-provider comparison that
+    relies on one identity — rejected.
+  - **New prefixed collector ids for Google:** would duplicate `gemini-2.5-flash` as both a
+    seed and a `google__…` collector model — rejected (breaks identity, see above).
+- **Caveats (now implemented):** `upsertAvailabilityRow`'s UPDATE is conditional on existing
+  `data_origin`/`verification_confidence`. Edge case: if a human-verified route is observed
+  removed by the collector, `markRemoved` still deactivates it but preserves the
+  `production`/`verified` label (records the removal in history). `verification_method` is
+  left as `manual` when `data_origin='production'`. Consistent for *all* direct-vendor
+  collectors, not just Gemini.
+- **Implementation implications (DONE):** a small, contained change to `DbCollectorSink`
+  (`upsertAvailabilityRow` + `markRemoved`); covered by `sink-provenance.test.ts`. No schema
+  change, no new table, no impact on OpenRouter (which already writes `live_collector`
+  against its own `openrouter__`-prefixed ids that never collide with seed).
 
 ---
 
@@ -832,7 +1008,11 @@ npm run collect:openrouter      # tsx cli.ts --collector=openrouter  (LIVE)
 npm run collect:openrouter:dry  # tsx cli.ts --collector=openrouter --dry-run
 npm run collect:gemini          # tsx cli.ts --collector=gemini       (LIVE)
 npm run collect:gemini:dry      # tsx cli.ts --collector=gemini --dry-run
+npm run collect:all             # tsx scripts/collect-all.ts (LIVE; runs OpenRouter + Gemini sequentially, isolation + exit code)
 ```
+
+> Deployment prerequisites, env vars, exact start/scheduler commands, and the
+> cross-process route-cache caveat: see `DEPLOY.md`.
 
 Important test-runtime detail: `vitest.config.ts` sets `FREEAI_DB_PATH=:memory:` and
 `vitest.setup.ts` reseeds the DB per-run, so `npm run test` never touches
@@ -908,8 +1088,8 @@ For future coding agents working in this repo:
 A new agent should verify the following before the first change, to prove the
 environment + dataset assumptions below still hold:
 
-1. **Repo state** — `git status` clean-ish, `main` (latest `ceef6a0`) is the running
-   base.
+1. **Repo state** — `git status` clean, `main` (HEAD `c89aa57`, ahead of `ceef6a0`
+   which added admin auth + CSRF) is the running base.
 2. **Toolchain** — `node --version` ≥ 22.5 (24.16 used), `npm ci` produces no errors.
 3. **Tests** — `npm run test` → 189 passing / 15 files; `npm run typecheck` clean;
    `npm run build` completes with no route errors.
@@ -926,8 +1106,10 @@ environment + dataset assumptions below still hold:
 7. **Enforced rules still drop-visible** — take one live route (e.g. an `openrouter__…`
    route) and confirm: `data_origin='live_collector'`, `verification_confidence=`,
    no invented rate limits, "limits not specified" note visible, history rows exist.
-8. **Auth gap acknowledged** — confirm `/admin` is reachable unauthenticated (expected
-   until auth lands; don't be surprised).
+8. **Auth verified present** — confirm `/admin` returns **401** without credentials and
+   **200** with HTTP Basic Auth. `ADMIN_PASSWORD_HASH` must be set in the environment or
+   every admin call 401s (safe). Mutating server actions and both collect `POST` endpoints
+   require the same Basic Auth; collect `GET` (run history) is intentionally open.
 
 After this checklist, you may work. When you finish, either update this document or
 add a "handoff updated at <date>" section with what changed so the next agent doesn't

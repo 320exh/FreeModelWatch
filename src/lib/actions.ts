@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { getDb } from "./db";
 import { getAvailability } from "./queries";
+import { invalidateRouteCache } from "./intelligence";
 import { runOpenRouterCollector, runGeminiCollector, type CollectorRunReport } from "./collectors/run";
 import { verifyBasicAuth } from "./auth";
 
@@ -167,6 +168,7 @@ export async function markVerified(formData: FormData | Record<string, any>) {
     notes: "Administratively verified against linked source(s).",
   });
 
+  invalidateRouteCache();
   safeRevalidate("/admin");
   safeRevalidate("/models");
   safeRevalidate(`/models/${row.model_id}`);
@@ -247,6 +249,7 @@ export async function adminVerifyRoute(formData: FormData | Record<string, any>)
     notes: changes.length ? changes.join("; ") : "Re-verified (no field changes).",
   });
 
+  invalidateRouteCache();
   safeRevalidate("/admin");
   safeRevalidate("/models");
   safeRevalidate(`/models/${row.model_id}`);
@@ -289,6 +292,7 @@ export async function addAvailability(formData: FormData | Record<string, any>) 
     notes: "Manually added free-access route.",
   });
 
+  invalidateRouteCache();
   safeRevalidate("/admin");
   safeRevalidate("/models");
   safeRevalidate(`/models/${modelId}`);

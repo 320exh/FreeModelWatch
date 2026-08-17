@@ -18,6 +18,8 @@ import {
   GEMINI_SOURCE_BILLING_URL,
 } from "./gemini";
 import type { CollectorSink, NormalizedAvailability, CollectorResult } from "./types";
+import type { VerificationConfidence } from "../types";
+import { invalidateRouteCache } from "../intelligence";
 
 function j(v: unknown): string | null {
   if (v == null || (Array.isArray(v) && v.length === 0)) return null;
@@ -28,14 +30,23 @@ function bool(v: boolean | null | undefined): number {
   return v ? 1 : 0;
 }
 
+// Confidence ordering for provenance preservation (Decision 3, §14c): a collector
+// must never downgrade an existing human-attested confidence.
+const CONF_RANK: Record<string, number> = { verified: 4, likely: 3, unverified: 2, stale: 1 };
+function maxConfidence(a: string, b: string): string {
+  return (CONF_RANK[a] ?? 0) >= (CONF_RANK[b] ?? 0) ? a : b;
+}
+
 /**
  * The ONLY place collector output is written to the database. Implements the
  * shared `CollectorSink` contract (so the generic orchestrator still works)
  * and exposes richer, provider-aware upserts used by `runOpenRouterCollector`.
  *
  * Every write:
- *   - stamps `data_origin = 'live_collector'` (never "production"/manually verified)
- *   - stamps `verification_confidence = 'likely'` (auto, not human-confirmed)
+ *   - stamps `data_origin = 'live_collector'` for seed/live rows, but PRESERVES an
+ *     existing `production` (admin-verified) `data_origin` and `verified_by`
+ *   - sets `verification_confidence` to the HIGHER of the existing and collector
+ *     confidence (never downgrades a human-verified `verified` to auto `likely`)
  *   - refreshes `last_verified_at` = today (the live "last checked" timestamp)
  *   - appends `verification_history` + `change_history` ONLY when something
  *     actually changed (so repeated runs are idempotent — no duplicates, no
@@ -217,6 +228,7 @@ export class DbCollectorSink implements CollectorSink {
         m.officialPageUrl, null, m.description,
       ];
       db.prepare(`INSERT INTO models (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`).run(...params);
+      invalidateRouteCache();
       return { added: true, changed: false, changedFields: [] };
     }
 
@@ -278,6 +290,7 @@ export class DbCollectorSink implements CollectorSink {
         notes: opts?.sourceNotes ?? "Changed in OpenRouter catalog during live collection.",
       });
     }
+    invalidateRouteCache();
     return { added: false, changed: true, changedFields: changes };
   }
 
@@ -288,6 +301,15 @@ export class DbCollectorSink implements CollectorSink {
   } {
     const db = getDb();
     const existing = db.prepare("SELECT * FROM availability WHERE id = ?").get(a.id) as any;
+
+    // Provenance preservation (Decision 3, §14c): never downgrade an existing
+    // human-attested (`production`) row, and never lower its confidence.
+    const isProduction = !!existing && existing.data_origin === "production";
+    const effDataOrigin = isProduction ? "production" : "live_collector";
+    const effMethod = isProduction ? (existing.verification_method ?? "manual") : "collector";
+    const effConfidence: VerificationConfidence = existing
+      ? (maxConfidence(existing.verification_confidence, a.confidence) as VerificationConfidence)
+      : a.confidence;
 
     if (!existing) {
       const cols = [
@@ -320,11 +342,12 @@ export class DbCollectorSink implements CollectorSink {
         modelId: a.modelId,
         providerId: a.providerId,
         verifiedBy: `collector:${a.providerId}`,
-        newConf: a.confidence,
+        newConf: effConfidence,
         newStatus: a.status,
         notes: "Initial import by live collector.",
       });
       this.linkSource(a.id, sourceId);
+      invalidateRouteCache();
       return { added: true, changed: false, reactivated: false };
     }
 
@@ -336,7 +359,7 @@ export class DbCollectorSink implements CollectorSink {
     };
     cmp("status", existing.status, a.status);
     cmp("access_type", existing.access_type, a.accessType);
-    cmp("verification_confidence", existing.verification_confidence, a.confidence);
+    cmp("verification_confidence", existing.verification_confidence, effConfidence);
     cmp("requires_payment_method", existing.requires_payment_method, bool(a.requiresPaymentMethod));
     cmp("payment_requirement_known", existing.payment_requirement_known, bool(a.paymentRequirementKnown ?? false));
     cmp("input_price_per_million", existing.input_price_per_million, a.inputPricePerMillion);
@@ -366,13 +389,13 @@ export class DbCollectorSink implements CollectorSink {
       `UPDATE availability SET status=?, access_type=?, verification_confidence=?, requires_payment_method=?, payment_requirement_known=?,
         input_price_per_million=?, output_price_per_million=?, rate_limit_rpm=?, rate_limit_tpm=?, daily_limit=?, monthly_limit=?,
         source_url=?, source_title=?, source_type=?,
-        expires_at=?, is_active=1, last_verified_at=?, verification_method='collector',
-        data_origin='live_collector', verification_notes=?
+        expires_at=?, is_active=1, last_verified_at=?, verification_method=?,
+        data_origin=?, verification_notes=?
        WHERE id=?`
     ).run(
-      a.status, a.accessType, a.confidence, bool(a.requiresPaymentMethod), bool(a.paymentRequirementKnown ?? false), a.inputPricePerMillion,
+      a.status, a.accessType, effConfidence, bool(a.requiresPaymentMethod), bool(a.paymentRequirementKnown ?? false), a.inputPricePerMillion,
       a.outputPricePerMillion, a.rateLimitRpm ?? null, a.rateLimitTpm ?? null, a.dailyLimit ?? null, a.monthlyLimit ?? null,
-      a.sourceUrl, a.sourceTitle, a.sourceType, a.expiresAt ?? null, this.today,
+      a.sourceUrl, a.sourceTitle, a.sourceType, a.expiresAt ?? null, this.today, effMethod, effDataOrigin,
       wantNotes, a.id
     );
     this.linkSource(a.id, sourceId);
@@ -400,24 +423,25 @@ export class DbCollectorSink implements CollectorSink {
         entityId: a.id,
         fieldChanged: changes.includes("status") ? "status_change" : changes.includes("input_price_per_million") || changes.includes("output_price_per_million") ? "pricing_change" : hasRateLimitChange ? "rate_limit_change" : "updated",
         oldValue: `${existing.verification_confidence}/${existing.status}`,
-        newValue: `${a.confidence}/${a.status}`,
+        newValue: `${effConfidence}/${a.status}`,
         changeSource: "automated",
         sourceUrl: a.sourceUrl,
         notes: `Changed field(s): ${fieldLabel}.`,
       });
     }
-    this.appendVerificationHistory({
-      availabilityId: a.id,
-      modelId: a.modelId,
-      providerId: a.providerId,
-      verifiedBy: `collector:${a.providerId}`,
-      previousConf: existing.verification_confidence,
-      previousStatus: existing.status,
-      newConf: a.confidence,
-      newStatus: a.status,
-      notes: reactivated ? "Re-activated by live collector." : "Updated by live collector.",
-    });
+      this.appendVerificationHistory({
+        availabilityId: a.id,
+        modelId: a.modelId,
+        providerId: a.providerId,
+        verifiedBy: `collector:${a.providerId}`,
+        previousConf: existing.verification_confidence,
+        previousStatus: existing.status,
+        newConf: effConfidence,
+        newStatus: a.status,
+        notes: reactivated ? "Re-activated by live collector." : "Updated by live collector.",
+      });
     }
+    invalidateRouteCache();
     return { added: false, changed: changes.length > 0 || reactivated, reactivated };
   }
 
@@ -432,11 +456,16 @@ export class DbCollectorSink implements CollectorSink {
     const defaultCatalog = existing.provider_id === GEMINI_PROVIDER_ID
       ? "Google catalog"
       : "OpenRouter catalog";
+    // Provenance preservation (Decision 3, §14c): a human-verified (`production`)
+    // route is still deactivated, but its attestation labels are kept.
+    const isProduction = existing.data_origin === "production";
+    const method = isProduction ? (existing.verification_method ?? "manual") : "collector";
+    const origin = isProduction ? "production" : "live_collector";
     db.prepare(
-      `UPDATE availability SET is_active=0, status='unavailable', last_verified_at=?, verification_method='collector',
-        data_origin='live_collector', verification_notes='Removed from ${defaultCatalog} — no longer returned by the API.'
+      `UPDATE availability SET is_active=0, status='unavailable', last_verified_at=?, verification_method=?,
+        data_origin=?, verification_notes='Removed from ${defaultCatalog} — no longer returned by the API.'
        WHERE id=?`
-    ).run(this.today, availabilityId);
+    ).run(this.today, method, origin, availabilityId);
     this.recordChange({
       entityType: "availability",
       entityId: availabilityId,
@@ -458,6 +487,7 @@ export class DbCollectorSink implements CollectorSink {
       newStatus: "unavailable",
       notes: note,
     });
+    invalidateRouteCache();
     return true;
   }
 
