@@ -12,6 +12,11 @@ exact commands. Architecture decisions are closed — see `docs/HANDOFF.md` §14
   which require starting Node with `--experimental-sqlite` (would have to be threaded through
   `next start`). The app uses the built-in `node:sqlite`; there are no extra native
   dependencies.
+
+  > **Production note (non-blocking maintenance):** the live deployment currently runs
+  > **Node v22.23.2** (the 22.13+ line, so `node:sqlite` works unflagged). DEPLOY.md recommends
+  > Node ≥ 24; an upgrade to ≥ 24 is a tracked future task, not done yet. Do not upgrade Node as
+  > part of documentation/config work.
 - **npm** (ships with Node). A `package-lock.json` is committed, so `npm ci` is reproducible.
 - A **writable, persistent directory** for the database (default `data/` under the project
   root). Back this volume up — it is the only stateful store.
@@ -41,7 +46,9 @@ Create `.env.local` in the project root (it is gitignored).
 **OPTIONAL**
 - `ADMIN_USERNAME` — default `admin`.
 - `SITE_URL` — public base URL for `sitemap.xml` / `robots.txt` (default
-  `https://freemodelwatch.example`).
+  `https://freemodelwatch.example`). In production this is set to `https://freeai.today`.
+  The canonical hostname is the apex `freeai.today`; both `www.freeai.today` and
+  `freemodelwatch.freeai.today` return a 301 redirect to `https://freeai.today/`.
 - `GEMINI_API_KEY` — enables live Google Gemini discovery; without it the Gemini collector
   falls back to the bundled official snapshot.
 - `FREEAI_DB_PATH` — absolute path to the SQLite file (default `<cwd>/data/freeai.db`). Keep
@@ -83,7 +90,7 @@ the project root with the same env as the web server.
 > explicitly, owned by the app user:
 >
 > ```bash
-> install -d -o <app-user> -g <app-user> -m 0755 /srv/freemodelwatch/data
+> install -d -o <app-user> -g <app-user> -m 0755 /opt/freemodelwatch/data
 > ```
 >
 > The systemd unit below also guards against this with an `ExecStartPre` `mkdir -p`.
@@ -111,8 +118,8 @@ Description=FreeModelWatch
 After=network.target
 
 [Service]
-WorkingDirectory=/srv/freemodelwatch
-EnvironmentFile=/srv/freemodelwatch/.env.local
+WorkingDirectory=/opt/freemodelwatch
+EnvironmentFile=/opt/freemodelwatch/.env.local
 ExecStart=/usr/bin/npm run start -- -p 3000
 Restart=on-failure
 
@@ -123,13 +130,13 @@ WantedBy=multi-user.target
 `/etc/systemd/system/freeai-collect.service` (invoked by a matching `.timer`)
 ```ini
 [Service]
-WorkingDirectory=/srv/freemodelwatch
-EnvironmentFile=/srv/freemodelwatch/.env.local
+WorkingDirectory=/opt/freemodelwatch
+EnvironmentFile=/opt/freemodelwatch/.env.local
 Type=oneshot
 # Ensure the persistent data directory exists BEFORE flock opens the lock file,
 # so a fresh-host timer tick can never fail on a missing data/ dir.
-ExecStartPre=/usr/bin/mkdir -p /srv/freemodelwatch/data
-ExecStart=/usr/bin/flock -n /srv/freemodelwatch/data/.collect.lock /usr/bin/npm run collect:all
+ExecStartPre=/usr/bin/mkdir -p /opt/freemodelwatch/data
+ExecStart=/usr/bin/flock -n /opt/freemodelwatch/data/.collect.lock /usr/bin/npm run collect:all
 ExecStartPost=/usr/bin/systemctl restart freeai
 ```
 
@@ -173,3 +180,39 @@ DB readability, unauthenticated admin rejection (401), admin auth with valid/inv
 credentials (when `SMOKE_ADMIN_PASSWORD` is set), the `collect:all` exit-code contract
 (`--collector`), systemd unit/timer structure and activity (`--unit freeai`), and DB
 persistence across a web restart (`--restart`). Non-destructive by default.
+
+## 9. Production deployment (verified baseline)
+
+This section records the **known-good production state** as the canonical reference. Treat it
+as the baseline; do not change it as part of documentation/config work.
+
+- **Host**: Oracle Cloud Ubuntu VM (Always Free, $0). Project path `/opt/freemodelwatch`.
+- **Canonical URL**: `https://freeai.today/` (HTTP 200).
+  - `https://www.freeai.today/` → 301 → `https://freeai.today/`
+  - `https://freemodelwatch.freeai.today/` → 301 → `https://freeai.today/`
+  - HTTP on all three hostnames → HTTPS redirect.
+- **TLS**: Let's Encrypt, valid. Terminated by **Caddy** (`/etc/caddy/Caddyfile`), active.
+- **App**: Next.js served on `127.0.0.1:3000`; fronted by Caddy. Managed by systemd
+  service **`freeai`** (active). Collector timer: **`freeai.timer`** (runs `freeai-collect`).
+- **Env**: `SITE_URL=https://freeai.today`.
+- **UFW**: active, default-deny incoming; `22/tcp`, `80/tcp`, `443/tcp` allowed. No
+  unexpected pre-UFW iptables REJECT rules remain. Do not reset UFW.
+- **Oracle**: resources remain Always Free / $0. Do not enable any paid resource.
+- **DNS**: authoritative/public DNS resolves `freeai.today` → `161.153.82.168` (Google DNS
+  confirmed). Do **not** change production DNS — see maintenance item §10.4.
+
+## 10. Maintenance backlog (non-blocking)
+
+Tracked future tasks. None block the current healthy deployment; do not fix as part of
+documentation/config work.
+
+1. **Node upgrade.** Production runs Node v22.23.2; DEPLOY.md recommends Node ≥ 24. Plan an
+   upgrade to ≥ 24 (verify `node:sqlite` + `next build` first). See §1.
+2. **Caddyfile formatting.** Run `caddy fmt` on `/etc/caddy/Caddyfile` to normalize formatting.
+   Cosmetic; no behavioral change intended.
+3. **`Server Reference ID did not match` errors.** Monitor for recurrence of the transient
+   Next.js errors after future restarts/deployments; investigate only if they persist.
+4. **ISP resolver NODATA.** The user's local ISP resolver currently returns NODATA for
+   `freeai.today`, while Google DNS (`8.8.8.8`) resolves it correctly to `161.153.82.168`. This
+   is a **local resolver issue, not a production DNS failure** — authoritative/public DNS is
+   working. Do not change production DNS or Cloudflare to "fix" the local resolver.

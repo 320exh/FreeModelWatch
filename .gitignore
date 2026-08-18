@@ -45,3 +45,8 @@ next-env.d.ts
 
 # runtime logs
 server.err
+
+# playwright mcp / browser debugging artifacts (generated at runtime)
+.playwright-mcp/
+apex-freeai-today.png
+

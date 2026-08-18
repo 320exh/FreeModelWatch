@@ -4,7 +4,7 @@ import { getAllModels, getAllProviders, getAllHarnesses } from "@/lib/queries";
 export const dynamic = "force-dynamic";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = process.env.SITE_URL ?? "https://freemodelwatch.example";
+  const base = process.env.SITE_URL ?? "https://freeai.today";
   const out: MetadataRoute.Sitemap = [
     { url: `${base}/`, changeFrequency: "daily", priority: 1 },
     { url: `${base}/models`, changeFrequency: "daily", priority: 0.9 },

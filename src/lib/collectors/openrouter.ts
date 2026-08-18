@@ -289,7 +289,7 @@ export async function fetchJsonWithRetry(url: string, opts: FetchOptions = {}): 
         method: "GET",
         headers: {
           Accept: "application/json",
-          "User-Agent": "FreeModelWatch-Collector/1.0 (+https://freemodelwatch.example)",
+          "User-Agent": "FreeModelWatch-Collector/1.0 (+https://freeai.today)",
         },
         signal: controller.signal,
       });

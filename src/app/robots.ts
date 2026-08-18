@@ -4,7 +4,7 @@ import { getAllModels, getAllProviders, getAllHarnesses } from "@/lib/queries";
 export const dynamic = "force-dynamic";
 
 export default function robots(): MetadataRoute.Robots {
-  const base = process.env.SITE_URL ?? "https://freemodelwatch.example";
+  const base = process.env.SITE_URL ?? "https://freeai.today";
   const models = getAllModels();
   const providers = getAllProviders();
   const harnesses = getAllHarnesses();

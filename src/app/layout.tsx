@@ -4,7 +4,7 @@ import { Nav } from "@/components/Nav";
 import { DataBanner } from "@/components/DataBanner";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.SITE_URL ?? "https://freemodelwatch.example"),
+  metadataBase: new URL(process.env.SITE_URL ?? "https://freeai.today"),
   title: {
     default: "FreeModelWatch — Free AI Model Availability Tracker",
     template: "%s · FreeModelWatch",
