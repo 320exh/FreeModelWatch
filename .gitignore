@@ -50,3 +50,6 @@ server.err
 .playwright-mcp/
 apex-freeai-today.png
 
+# local-only project docs (author-only, not shared in the repo)
+/docs/
+
