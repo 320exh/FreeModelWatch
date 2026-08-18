@@ -191,15 +191,64 @@ as the baseline; do not change it as part of documentation/config work.
   - `https://www.freeai.today/` → 301 → `https://freeai.today/`
   - `https://freemodelwatch.freeai.today/` → 301 → `https://freeai.today/`
   - HTTP on all three hostnames → HTTPS redirect.
-- **TLS**: Let's Encrypt, valid. Terminated by **Caddy** (`/etc/caddy/Caddyfile`), active.
+- **TLS**: **Cloudflare Origin CA** (cert `/etc/caddy/origin-ca/freeai.today.crt`, key
+  `/etc/caddy/origin-ca/freeai.today.key`), valid. The Cloudflare proxy is set to SSL/TLS
+  **Full (strict)**, so only the matching Origin CA cert is accepted. **Caddy**
+  (`/etc/caddy/Caddyfile`) terminates TLS with this cert; the previous Let's Encrypt config is
+  backed up at `/etc/caddy/Caddyfile.bak.le`. Do not revert to Let's Encrypt without also
+  updating Cloudflare SSL/TLS mode.
 - **App**: Next.js served on `127.0.0.1:3000`; fronted by Caddy. Managed by systemd
   service **`freeai`** (active). Collector timer: **`freeai.timer`** (runs `freeai-collect`).
 - **Env**: `SITE_URL=https://freeai.today`.
-- **UFW**: active, default-deny incoming; `22/tcp`, `80/tcp`, `443/tcp` allowed. No
-  unexpected pre-UFW iptables REJECT rules remain. Do not reset UFW.
-- **Oracle**: resources remain Always Free / $0. Do not enable any paid resource.
+- **UFW**: active, default-deny incoming. Inbound `80/tcp` and `443/tcp` are allowed **only
+  from the Cloudflare IPv4 + IPv6 ranges**; `22/tcp` is allowed **only from admin IP
+  `108.247.52.154`**. No unexpected pre-UFW iptables REJECT rules remain. Do not reset UFW.
+- **Oracle**: resources remain Always Free / $0. Do not enable any paid resource. The OCI
+  Security List (stateful; no NSG attached) permits inbound `80/tcp` and `443/tcp` **only from
+  the Cloudflare IPv4 ranges**, and `22/tcp` **only from `108.247.52.154/32`**; `3000/tcp` is
+  not exposed. Egress is all-allowed.
 - **DNS**: authoritative/public DNS resolves `freeai.today` → `161.153.82.168` (Google DNS
   confirmed). Do **not** change production DNS — see maintenance item §10.4.
+
+### 9.1 Network perimeter (verified lockdown)
+
+Both network perimeters (OCI Security List and host UFW) were tightened so the origin is
+reachable only through Cloudflare, and administrative SSH is restricted to the operator's
+current public IP. Verified end-to-end on 2026-08-18.
+
+| Layer             | Port            | Allowed from …                                  | Blocked from          |
+|-------------------|-----------------|-------------------------------------------------|-----------------------|
+| OCI Security List | 80/tcp, 443/tcp | Cloudflare IPv4 ranges only                     | everything else       |
+| OCI Security List | 22/tcp          | `108.247.52.154/32` only                        | everything else       |
+| OCI Security List | 3000/tcp        | not exposed                                     | everything            |
+| UFW               | 80/tcp, 443/tcp | Cloudflare IPv4 + IPv6 ranges only              | everything else       |
+| UFW               | 22/tcp          | `108.247.52.154` only                           | everything else       |
+
+Consequences (verified):
+- The public site works **only through Cloudflare** (`https://freeai.today/` → 200;
+  `www`/`freemodelwatch` → 301). All three DNS records are proxied (orange-cloud) under
+  Cloudflare SSL/TLS **Full (strict)**, and the origin presents the **Cloudflare Origin CA**
+  certificate.
+- **Direct access to the origin** (`161.153.82.168:80` / `:443` from a non-Cloudflare IP) is
+  blocked at both perimeters.
+- OCI has no IPv6 Cloudflare rule because the VNIC has no global IPv6 address; Cloudflare
+  reaches the origin over IPv4. The UFW IPv6 Cloudflare rules are therefore defensive only.
+
+### 9.2 Operational caveat — admin SSH is IP-restricted
+
+SSH (port 22) is intentionally locked to the operator's **current public IP
+`108.247.52.154`** at both the OCI Security List and UFW. If that public IP changes (e.g., the
+operator's ISP reassigns it, or the connection is made from a different network), **SSH — and
+therefore all administrative access — will be refused** until the allow-lists are updated.
+
+To recover or change the allowed IP:
+- **OCI**: edit the Security List ingress rule `22/tcp` → `108.247.52.154/32` (console only;
+  cannot be changed over SSH).
+- **UFW**: `sudo ufw allow from <new-ip> to any port 22`, then remove the old rule
+  (`sudo ufw delete allow from 108.247.52.154 to any port 22`, or by number via
+  `sudo ufw status numbered`).
+- **Out-of-band fallback**: if locked out, use the OCI **Instance Console Connection**
+  (VNC/serial) to regain shell access and repair the rules.
 
 ## 10. Maintenance backlog (non-blocking)
 
