@@ -1,6 +1,6 @@
 # Live Collectors
 
-This document is the contract for FreeModelWatch's automated data collectors. The **OpenRouter
+This document is the contract for FreeAI.today's automated data collectors. The **OpenRouter
 collector** (`src/lib/collectors/openrouter.ts`) is the first live collector and is the
 **reference template** for every provider that follows.
 
@@ -94,7 +94,7 @@ cadence is **hourly** via cron, with the dry-run available for CI/smoke checks. 
 idempotent: re-running against an unchanged catalog performs **zero** writes and creates **no**
 duplicates or spurious history.
 
-## What "free" means in FreeModelWatch
+## What "free" means in FreeAI.today
 
 A model is classified **free** only when **every** usage-priced dimension OpenRouter exposes is
 explicitly `0` (zero cost):

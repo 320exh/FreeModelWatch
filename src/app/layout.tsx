@@ -6,8 +6,8 @@ import { DataBanner } from "@/components/DataBanner";
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.SITE_URL ?? "https://freeai.today"),
   title: {
-    default: "FreeModelWatch — Free AI Model Availability Tracker",
-    template: "%s · FreeModelWatch",
+    default: "FreeAI.today — Free AI available today",
+    template: "%s · FreeAI.today",
   },
   alternates: {
     canonical: "/",
@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <DataBanner />
         <main className="flex-1 w-full mx-auto max-w-[1400px] px-4 sm:px-6 py-6">{children}</main>
         <footer className="border-t border-[var(--border)] mt-10 py-6 text-center text-xs text-[var(--fg-mute)]">
-          FreeModelWatch · Community-curated free AI availability · Verify sources before relying on data.
+          FreeAI.today · Community-curated free AI availability · Verify sources before relying on data.
         </footer>
       </body>
     </html>

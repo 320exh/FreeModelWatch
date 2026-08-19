@@ -60,7 +60,7 @@ export function unauthorizedResponse(): Response {
     status: 401,
     headers: {
       "Content-Type": "application/json",
-      "WWW-Authenticate": 'Basic realm="FreeModelWatch Admin"',
+      "WWW-Authenticate": 'Basic realm="FreeAI.today Admin"',
     },
   });
 }

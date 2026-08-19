@@ -289,7 +289,7 @@ export async function fetchJsonWithRetry(url: string, opts: FetchOptions = {}): 
         method: "GET",
         headers: {
           Accept: "application/json",
-          "User-Agent": "FreeModelWatch-Collector/1.0 (+https://freeai.today)",
+          "User-Agent": "freeai.today-collector/1.0 (+https://freeai.today)",
         },
         signal: controller.signal,
       });
@@ -341,7 +341,7 @@ export function authorOf(modelId: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Normalization into FreeModelWatch's internal schema
+// Normalization into FreeAI.today's internal schema
 // ---------------------------------------------------------------------------
 
 export interface NormalizedModelRow {

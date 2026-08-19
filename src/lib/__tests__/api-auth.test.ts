@@ -105,7 +105,7 @@ describe("API route authentication", () => {
     it("returns 401 with WWW-Authenticate header", () => {
       const response = unauthorizedResponse();
       expect(response.status).toBe(401);
-      expect(response.headers.get("WWW-Authenticate")).toBe('Basic realm="FreeModelWatch Admin"');
+      expect(response.headers.get("WWW-Authenticate")).toBe('Basic realm="FreeAI.today Admin"');
       expect(response.headers.get("Content-Type")).toBe("application/json");
     });
   });

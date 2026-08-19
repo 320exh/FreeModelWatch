@@ -1,4 +1,4 @@
-# Deployment — FreeModelWatch
+# Deployment — FreeAI.today
 
 Verified deployment-readiness for the decided target: a **persistent Linux host** running
 `next start` (Node ≥ 22.5, persistent SQLite, co-located scheduler). **No source or config

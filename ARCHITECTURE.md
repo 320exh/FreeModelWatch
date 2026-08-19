@@ -1,6 +1,6 @@
 # Architecture
 
-FreeModelWatch is intentionally a **thin, layered Next.js app** over a single SQLite file.
+FreeAI.today is intentionally a **thin, layered Next.js app** over a single SQLite file.
 There is no ORM, no separate API server, and no background worker — all data access goes
 through one module.
 

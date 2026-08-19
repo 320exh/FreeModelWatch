@@ -1,5 +1,5 @@
 /**
- * FreeModelWatch — deployment smoke test / validation.
+ * FreeAI.today — deployment smoke test / validation.
  *
  * Safe, read-only-ish validation of a deployed instance. Never prints secret values.
  * Non-destructive by default; network-touching (collector) and disruptive (restart)
@@ -236,7 +236,7 @@ async function main() {
     skip("persistence/restart", "pass --restart to exercise web restart + DB persistence");
   }
 
-  console.log("\n===== FreeModelWatch deployment smoke results =====");
+  console.log("\n===== FreeAI.today deployment smoke results =====");
   let failed = 0;
   for (const r of results) {
     console.log(`[${r.status}] ${r.name}${r.detail ? ` — ${r.detail}` : ""}`);

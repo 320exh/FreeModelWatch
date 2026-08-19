@@ -1,4 +1,4 @@
-# FreeModelWatch
+# FreeAI.today
 
 A tracker for which AI models are available for **free** — across direct provider APIs,
 aggregators, cloud credits, local/hosted OSS, and coding

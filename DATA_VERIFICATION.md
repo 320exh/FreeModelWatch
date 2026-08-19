@@ -1,6 +1,6 @@
 # Data Verification & Freshness
 
-The whole point of FreeModelWatch is trustworthy "is this model free right now?" data.
+The whole point of FreeAI.today is trustworthy "is this model free right now?" data.
 This document explains how that is enforced in code.
 
 ## Three questions every row answers
