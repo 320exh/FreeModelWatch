@@ -23,7 +23,7 @@ export function Nav() {
       <div className="w-full mx-auto max-w-[1400px] px-4 sm:px-6 h-14 flex items-center gap-4">
         <Link href="/" className="flex items-center gap-2 font-semibold shrink-0">
           <span className="text-[var(--accent)] text-lg">◆</span>
-          <span>FreeModel<span className="text-[var(--accent)]">Watch</span></span>
+          <span>FreeAI<span className="text-[var(--accent)]">.today</span></span>
         </Link>
         <nav className="hidden md:flex items-center gap-1 overflow-x-auto scrollbar-thin">
           {LINKS.map((l) => {

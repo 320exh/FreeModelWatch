@@ -27,7 +27,7 @@ exact commands. Architecture decisions are closed — see `docs/HANDOFF.md` §14
 ## 2. Build & install
 
 ```bash
-git clone <repo> && cd FreeModelWatch
+git clone https://github.com/320exh/freeai.today.git && cd freeai.today
 npm ci
 npm run build          # `next build` — safe on a clean host; it does NOT touch the DB.
 ```
@@ -90,7 +90,7 @@ the project root with the same env as the web server.
 > explicitly, owned by the app user:
 >
 > ```bash
-> install -d -o <app-user> -g <app-user> -m 0755 /opt/freemodelwatch/data
+> install -d -o <app-user> -g <app-user> -m 0755 /opt/freeai/data
 > ```
 >
 > The systemd unit below also guards against this with an `ExecStartPre` `mkdir -p`.
@@ -114,12 +114,12 @@ Keep to a **single `next start` instance** — the cache is per-process.
 `/etc/systemd/system/freeai.service`
 ```ini
 [Unit]
-Description=FreeModelWatch
+Description=FreeAI.today
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/freemodelwatch
-EnvironmentFile=/opt/freemodelwatch/.env.local
+WorkingDirectory=/opt/freeai
+EnvironmentFile=/opt/freeai/.env.local
 ExecStart=/usr/bin/npm run start -- -p 3000
 Restart=on-failure
 
@@ -130,13 +130,13 @@ WantedBy=multi-user.target
 `/etc/systemd/system/freeai-collect.service` (invoked by a matching `.timer`)
 ```ini
 [Service]
-WorkingDirectory=/opt/freemodelwatch
-EnvironmentFile=/opt/freemodelwatch/.env.local
+WorkingDirectory=/opt/freeai
+EnvironmentFile=/opt/freeai/.env.local
 Type=oneshot
 # Ensure the persistent data directory exists BEFORE flock opens the lock file,
 # so a fresh-host timer tick can never fail on a missing data/ dir.
-ExecStartPre=/usr/bin/mkdir -p /opt/freemodelwatch/data
-ExecStart=/usr/bin/flock -n /opt/freemodelwatch/data/.collect.lock /usr/bin/npm run collect:all
+ExecStartPre=/usr/bin/mkdir -p /opt/freeai/data
+ExecStart=/usr/bin/flock -n /opt/freeai/data/.collect.lock /usr/bin/npm run collect:all
 ExecStartPost=/usr/bin/systemctl restart freeai
 ```
 
@@ -153,7 +153,7 @@ on failure. The timer just needs the service name; a `.timer` unit like:
 
 ```ini
 [Unit]
-Description=FreeModelWatch collector timer
+Description=FreeAI.today collector timer
 [Timer]
 OnCalendar=hourly
 Persistent=true
@@ -186,7 +186,7 @@ persistence across a web restart (`--restart`). Non-destructive by default.
 This section records the **known-good production state** as the canonical reference. Treat it
 as the baseline; do not change it as part of documentation/config work.
 
-- **Host**: Oracle Cloud Ubuntu VM (Always Free, $0). Project path `/opt/freemodelwatch`.
+- **Host**: Oracle Cloud Ubuntu VM (Always Free, $0). Project path `/opt/freeai`.
 - **Canonical URL**: `https://freeai.today/` (HTTP 200).
   - `https://www.freeai.today/` → 301 → `https://freeai.today/`
   - `https://freemodelwatch.freeai.today/` → 301 → `https://freeai.today/`
