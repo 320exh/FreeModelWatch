@@ -46,7 +46,7 @@ Create `.env.local` in the project root (it is gitignored).
 **OPTIONAL**
 - `ADMIN_USERNAME` — default `admin`.
 - `SITE_URL` — public base URL for `sitemap.xml` / `robots.txt` (default
-  `https://freemodelwatch.example`). In production this is set to `https://freeai.today`.
+  `https://example.com`). In production this is set to `https://freeai.today`.
   The canonical hostname is the apex `freeai.today`; both `www.freeai.today` and
   `freemodelwatch.freeai.today` return a 301 redirect to `https://freeai.today/`.
 - `GEMINI_API_KEY` — enables live Google Gemini discovery; without it the Gemini collector
