@@ -265,3 +265,27 @@ documentation/config work.
    `freeai.today`, while Google DNS (`8.8.8.8`) resolves it correctly to `161.153.82.168`. This
    is a **local resolver issue, not a production DNS failure** — authoritative/public DNS is
    working. Do not change production DNS or Cloudflare to "fix" the local resolver.
+
+## 11. Cloudflare API access (local credentials)
+
+Cloudflare API operations for `freeai.today` are performed from the local machine with a small
+PowerShell helper, so tokens never enter source, commits, or chat.
+
+- **Credentials are stored in `.env.local`** at the project root (gitignored — see §3). It holds
+  exactly two variables and **must NEVER be committed**:
+  - `CF_READ_TOKEN` — for **read-only** Cloudflare API operations.
+  - `CF_WRITE_TOKEN` — for Cloudflare **configuration changes** (mutations).
+- **Helper:** `scripts/cloudflare.ps1`. It loads `CF_READ_TOKEN` / `CF_WRITE_TOKEN` from
+  `.env.local` (session-scoped, nothing written to disk) and exposes:
+  - `CF` — read-only calls (`CF_READ_TOKEN`).
+  - `CFw` — mutating calls (`CF_WRITE_TOKEN`).
+- **OpenCode / Hy3 sessions:** OpenCode launches PowerShell with `-NoProfile`, so the profile
+  dot-source is not loaded. When Cloudflare access is needed, dot-source the helper explicitly
+  from the project root:
+  ```powershell
+  . scripts/cloudflare.ps1
+  ```
+- **Rules:** never paste Cloudflare token values into source code, documentation, commits, or
+  chat; never commit `.env.local`.
+- **Lost credentials?** Inspect the persistent `.env.local` setup (and the profile dot-source)
+  **before** creating new tokens. No token values are kept in this repository.
