@@ -250,6 +250,53 @@ To recover or change the allowed IP:
 - **Out-of-band fallback**: if locked out, use the OCI **Instance Console Connection**
   (VNC/serial) to regain shell access and repair the rules.
 
+### 9.3 Security contact & inbound email (`security@freeai.today`)
+
+`security@freeai.today` is a **functional inbound email address** used as the project's
+published security contact. Cloudflare Email Routing receives the mail and forwards it to a
+verified external destination; the Oracle server does **not** run a mail server.
+
+**Public security contact (`security.txt`).** The live site serves
+`https://freeai.today/.well-known/security.txt` (verified HTTP 200) containing:
+
+```text
+Contact: mailto:security@freeai.today
+```
+
+This file is served directly by **Caddy on the Oracle Cloud server**, **outside the Git
+repository** — it is not version-controlled with the application. A repository-only audit will
+therefore not reveal where the security contact address is defined.
+
+**Inbound flow.** `security@freeai.today` → Cloudflare Email Routing → verified external
+destination. Cloudflare Email Routing is enabled and active (`status: ready`); the routing rule
+forwards `security@freeai.today` to a verified external destination. The destination is
+intentionally **not documented here** for privacy.
+
+**Verification.** The path was tested end-to-end: an email sent to `security@freeai.today`
+arrived at the destination inbox (initially classified as spam by Gmail, then marked "Not spam"
+and received successfully).
+
+**Email authentication (auto-configured by Cloudflare Email Routing — do not hand-edit):**
+
+- **MX**: three records `freeai.today` → `route1.mx.cloudflare.net`, `route2.mx.cloudflare.net`,
+  `route3.mx.cloudflare.net` (Cloudflare-managed).
+- **SPF**: `v=spf1 include:_spf.mx.cloudflare.net ~all`. (The record was originally
+  `v=spf1 -all`; Cloudflare Email Routing changed it automatically when routing was enabled. Do
+  not treat the old `-all` value as current.)
+- **DKIM**: Cloudflare-managed record at `cf2024-1._domainkey.freeai.today`.
+- **DMARC**: `v=DMARC1; p=reject; adkim=s; aspf=s; pct=100` (unchanged).
+
+**Scope.** This is **inbound email forwarding only**. Outbound email sending from `@freeai.today`
+is **not** configured.
+
+**Admin address.** `admin@freeai.today` is **not** currently configured — do not assume it exists
+or is functional. It may be added later if needed.
+
+**External configuration note.** The Cloudflare Email Routing setup (routing rule, destination
+address, and the MX/SPF/DKIM records above) lives in Cloudflare, **outside the Git repository**. A
+repository-only audit will not reveal the `security@freeai.today` forwarding rule. Manage it via
+the Cloudflare dashboard or `scripts/cloudflare.ps1` (§11).
+
 ## 10. Maintenance backlog (non-blocking)
 
 Tracked future tasks. None block the current healthy deployment; do not fix as part of
