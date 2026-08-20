@@ -1,6 +1,7 @@
 import {
   runOpenRouterCollector,
   runGeminiCollector,
+  runGroqCollector,
   formatRunReport,
   type CollectorRunReport,
 } from "../src/lib/collectors/run";
@@ -27,6 +28,7 @@ export async function runAll(opts: RunAllOptions = {}): Promise<number> {
     opts.runners ?? [
       () => runOpenRouterCollector({ dryRun }),
       () => runGeminiCollector({ dryRun }),
+      () => runGroqCollector({ dryRun }),
     ];
 
   let anyFailed = false;

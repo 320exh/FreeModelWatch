@@ -21,6 +21,7 @@ type Report = {
 const COLLECTORS = [
   { id: "openrouter", label: "OpenRouter" },
   { id: "gemini", label: "Gemini (Google AI Studio)" },
+  { id: "groq", label: "Groq" },
 ];
 
 export default function CollectorRunner() {

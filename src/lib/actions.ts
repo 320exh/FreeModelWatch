@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getDb } from "./db";
 import { getAvailability } from "./queries";
 import { invalidateRouteCache } from "./intelligence";
-import { runOpenRouterCollector, runGeminiCollector, type CollectorRunReport } from "./collectors/run";
+import { runOpenRouterCollector, runGeminiCollector, runGroqCollector, type CollectorRunReport } from "./collectors/run";
 import { verifyBasicAuth } from "./auth";
 
 function today(): string {
@@ -347,7 +347,9 @@ export async function adminRunCollector(formData: FormData | Record<string, any>
   try {
     const report = collectorId === "gemini"
       ? await runGeminiCollector({ dryRun })
-      : await runOpenRouterCollector({ dryRun });
+      : collectorId === "groq"
+        ? await runGroqCollector({ dryRun })
+        : await runOpenRouterCollector({ dryRun });
     safeRevalidate("/admin");
     safeRevalidate("/models");
     safeRevalidate("/best");
