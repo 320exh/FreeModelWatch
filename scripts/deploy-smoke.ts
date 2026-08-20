@@ -144,6 +144,28 @@ function dbReadable(baseUrl: string) {
     });
 }
 
+const LIVE_PROVIDERS = ["openrouter", "google", "groq"];
+async function liveProviderData(baseUrl: string) {
+  try {
+    const res = await fetch(baseUrl + "/api/models/free?limit=200");
+    if (!res.ok) {
+      fail("live-provider-data", `status ${res.status}`);
+      return;
+    }
+    const j = await res.json();
+    const models: any[] = Array.isArray(j.models) ? j.models : [];
+    const present = new Set(models.map((m) => m.providerId).filter(Boolean));
+    const missing = LIVE_PROVIDERS.filter((p) => !present.has(p));
+    if (missing.length === 0) {
+      pass("live-provider-data", `all live providers present (${[...present].join(",")})`);
+    } else {
+      fail("live-provider-data", `missing live providers: ${missing.join(",")} (present: ${[...present].join(",")})`);
+    }
+  } catch (e) {
+    fail("live-provider-data", `unreachable: ${(e as Error).message}`);
+  }
+}
+
 function collectorCheck() {
   const p = spawnSync("npm", ["run", "collect:all"], {
     cwd: ROOT,
@@ -224,6 +246,7 @@ async function main() {
   envCheck();
   await httpChecks(baseUrl);
   const before = await dbReadable(baseUrl);
+  await liveProviderData(baseUrl);
 
   if (hasFlag(args.collector)) collectorCheck();
   else skip("collector", "pass --collector to run npm run collect:all and verify the exit-code contract");

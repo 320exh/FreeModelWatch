@@ -404,3 +404,28 @@ Documentation-only or CI-infrastructure commits (e.g. `DEPLOY.md`, `.github/`) d
   systemctl list-timers freeai.timer
   journalctl -u freeai-collect.service -u freeai --since "2 hours ago"
   ```
+
+### 12.4 Post-deploy smoke test
+
+`scripts/deploy-smoke.ts` (run via `npm run smoke:deploy`) is a safe, read-only
+verification of a deployed instance. It checks env config, public-endpoint HTTP
+status (`/`, `/api/models/free`, `/models`, `/api/providers`), `/admin` → 401,
+DB readability, **live-provider coverage** (`/api/models/free` must include
+`openrouter`, `google`, and `groq`), and systemd unit/timer structure. It never
+prints secrets and is non-destructive by default.
+
+Run it from the server (local-origin, behind Caddy) with the app's env loaded:
+
+```bash
+cd /opt/freeai
+set -a && . .env.local && set +a
+npm run smoke:deploy -- --base-url http://localhost:3000
+```
+
+Opt-in, state-changing checks (not needed for a routine health check):
+- `--collector` — also run `npm run collect:all` and verify its exit-code contract
+- `--restart` — exercise a web restart and confirm DB persistence
+- `--admin-password '<pw>'` — verify a successful admin login (200) and a rejected
+  bad login (401)
+
+Exit code is `0` only if no check FAILED.
