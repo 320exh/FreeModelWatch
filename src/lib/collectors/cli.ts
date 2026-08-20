@@ -1,4 +1,4 @@
-import { runOpenRouterCollector, runGeminiCollector, formatRunReport } from "./run";
+import { runOpenRouterCollector, runGeminiCollector, runGroqCollector, formatRunReport } from "./run";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -8,11 +8,12 @@ async function main() {
   const runners: Record<string, () => ReturnType<typeof runOpenRouterCollector>> = {
     openrouter: () => runOpenRouterCollector({ dryRun }),
     gemini: () => runGeminiCollector({ dryRun }),
+    groq: () => runGroqCollector({ dryRun }),
   };
 
   const run = runners[collectorArg];
   if (!run) {
-    console.error(`Unknown collector "${collectorArg}". Supported: openrouter, gemini.`);
+    console.error(`Unknown collector "${collectorArg}". Supported: openrouter, gemini, groq.`);
     process.exit(2);
   }
 

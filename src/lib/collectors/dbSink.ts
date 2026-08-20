@@ -17,6 +17,15 @@ import {
   GEMINI_SOURCE_BILLING_ID,
   GEMINI_SOURCE_BILLING_URL,
 } from "./gemini";
+import {
+  GROQ_PROVIDER_ID,
+  GROQ_SOURCE_MODELS_ID,
+  GROQ_SOURCE_MODELS_URL,
+  GROQ_SOURCE_PRICING_ID,
+  GROQ_SOURCE_PRICING_URL,
+  GROQ_SOURCE_RATELIMITS_ID,
+  GROQ_SOURCE_RATELIMITS_URL,
+} from "./groq";
 import type { CollectorSink, NormalizedAvailability, CollectorResult } from "./types";
 import type { VerificationConfidence } from "../types";
 import { invalidateRouteCache } from "../intelligence";
@@ -207,6 +216,40 @@ export class DbCollectorSink implements CollectorSink {
     ensure(GEMINI_SOURCE_RATELIMITS_ID, GEMINI_SOURCE_RATELIMITS_URL, "Gemini API — Rate limits", "Per-model token-rate limits; RPM/RPD are dynamic per usage tier.");
     ensure(GEMINI_SOURCE_BILLING_ID, GEMINI_SOURCE_BILLING_URL, "Gemini API — Billing", "Free tier requires no credit card.");
     return [GEMINI_SOURCE_CATALOG_ID, GEMINI_SOURCE_PRICING_ID, GEMINI_SOURCE_RATELIMITS_ID, GEMINI_SOURCE_BILLING_ID];
+  }
+
+  ensureGroqProvider(): void {
+    const db = getDb();
+    db.prepare(
+      `INSERT OR IGNORE INTO providers
+        (id, name, category, website_url, api_docs_url, pricing_url, has_free_tier,
+         requires_payment_method, requires_signup, status, data_origin, verification_confidence, last_verified_at)
+        VALUES (?, 'Groq', 'direct_api', 'https://groq.com', 'https://console.groq.com/docs',
+         'https://groq.com/pricing', 1, 0, 1, 'available', 'live_collector', 'likely', ?)`
+    ).run(GROQ_PROVIDER_ID, this.today);
+    db.prepare(
+      `UPDATE providers SET name='Groq', category='direct_api', website_url='https://groq.com',
+        api_docs_url='https://console.groq.com/docs', pricing_url='https://groq.com/pricing',
+        has_free_tier=1, requires_payment_method=0, requires_signup=1, status='available',
+        data_origin='live_collector', verification_confidence='likely', last_verified_at=?
+       WHERE id=?`
+    ).run(this.today, GROQ_PROVIDER_ID);
+  }
+
+  ensureGroqSources(): [string, string, string] {
+    const db = getDb();
+    const ensure = (id: string, url: string, title: string, notes: string) => {
+      db.prepare(
+        `INSERT INTO sources
+          (id, url, title, source_type, provider_id, is_verified, reliability, date_last_checked, last_checked_at, notes)
+         VALUES (?, ?, ?, 'official_docs', ?, 1, 'verified', ?, ?, ?)
+         ON CONFLICT(url) DO UPDATE SET last_checked_at=excluded.last_checked_at, date_last_checked=excluded.date_last_checked`
+      ).run(id, url, title, GROQ_PROVIDER_ID, this.today, this.today, notes);
+    };
+    ensure(GROQ_SOURCE_MODELS_ID, GROQ_SOURCE_MODELS_URL, "Groq — Models", "Authoritative model list (https://console.groq.com/docs/models).");
+    ensure(GROQ_SOURCE_PRICING_ID, GROQ_SOURCE_PRICING_URL, "Groq — Pricing", "Authoritative free-tier / paid pricing.");
+    ensure(GROQ_SOURCE_RATELIMITS_ID, GROQ_SOURCE_RATELIMITS_URL, "Groq — Rate limits", "Per-model free-tier rate limits (RPM/TPM/RPD).");
+    return [GROQ_SOURCE_MODELS_ID, GROQ_SOURCE_PRICING_ID, GROQ_SOURCE_RATELIMITS_ID];
   }
 
   upsertModelRow(

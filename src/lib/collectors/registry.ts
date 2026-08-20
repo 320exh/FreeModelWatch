@@ -1,6 +1,7 @@
 import type { Collector } from "./types";
 import { OpenAICollector } from "./examples/openai";
 import { geminiCollector } from "./gemini";
+import { groqCollector } from "./groq";
 
 /**
  * Registry of collectors. To add a provider, implement its `Collector` and push
@@ -14,6 +15,7 @@ import { geminiCollector } from "./gemini";
 export const collectors: Collector[] = [
   new OpenAICollector(),
   geminiCollector,
+  groqCollector,
   // new AnthropicCollector(),
   // new GoogleCollector(),
 ];
