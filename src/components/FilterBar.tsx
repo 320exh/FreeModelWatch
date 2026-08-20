@@ -46,6 +46,7 @@ const ORIGINS: { key: DataOrigin; label: string }[] = [
 ];
 
 const SORTS = [
+  { key: "live-first", label: "Live First" },
   { key: "relevance", label: "Relevance" },
   { key: "context", label: "Context" },
   { key: "coding", label: "Coding" },

@@ -595,7 +595,7 @@ export interface ModelFilters {
   minContext?: number;
   verified?: VerificationConfidence[];
   origin?: DataOrigin[];
-  sort?: "relevance" | "context" | "coding" | "recent" | "freshness" | "reliability";
+  sort?: "live-first" | "relevance" | "context" | "coding" | "recent" | "freshness" | "reliability";
 }
 
 export function queryModels(f: ModelFilters): ModelView[] {
@@ -661,6 +661,15 @@ export function queryModels(f: ModelFilters): ModelView[] {
     case "reliability":
       views.sort((a, b) => confSortKey(b.bestConfidence) - confSortKey(a.bestConfidence));
       break;
+    case "live-first":
+      views.sort((a, b) => {
+        const aLive = isLiveFreshness(a.bestFreshness) ? 1 : 0;
+        const bLive = isLiveFreshness(b.bestFreshness) ? 1 : 0;
+        if (aLive !== bLive) return bLive - aLive;
+        // Within each group, preserve relevance ranking: capability first, then context
+        return (b.codingCapability ?? 0) - (a.codingCapability ?? 0) || (b.contextWindow ?? 0) - (a.contextWindow ?? 0);
+      });
+      break;
     default:
       // Relevance: capability first, NOT number of routes — avoid rewarding a
       // model merely for being listed through many providers.
@@ -672,7 +681,12 @@ export function queryModels(f: ModelFilters): ModelView[] {
 function freshnessSortKey(t: FreshnessTier): number {
   return { live_verified: 6, likely: 4, unverified: 2, seed_demo: 1, stale: 0, expired: 0, unavailable: -1 }[t];
 }
-function confSortKey(c: VerificationConfidence): number {
+
+export function isLiveFreshness(t: FreshnessTier): boolean {
+  return t === "live_verified" || t === "likely";
+}
+
+export function confSortKey(c: VerificationConfidence): number {
   return { verified: 4, likely: 3, unverified: 1, stale: 0 }[c];
 }
 

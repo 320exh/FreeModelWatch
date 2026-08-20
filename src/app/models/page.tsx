@@ -43,7 +43,7 @@ export default async function ModelsPage({
     noSignup: bool(sp.nosignup),
     apiKeyRequired: sp.apikey === "1" ? true : sp.apikey === "0" ? false : null,
     minContext: sp.minctx ? Number(sp.minctx) : undefined,
-    sort: (typeof sp.sort === "string" ? (sp.sort as ModelFilters["sort"]) : "relevance"),
+    sort: (typeof sp.sort === "string" ? (sp.sort as ModelFilters["sort"]) : "live-first"),
   };
 
   const results = queryModels(filters);

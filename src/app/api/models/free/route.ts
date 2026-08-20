@@ -85,7 +85,7 @@ export function GET(req: Request) {
       noSignup: boolParam(p.get("noSignup")) ?? false,
       apiKeyRequired: p.get("apiKeyRequired") ? (boolParam(p.get("apiKeyRequired")) ?? null) : null,
       minContext: toNum(p.get("minContext")),
-      sort: (p.get("sort") as ModelFilters["sort"]) || "relevance",
+      sort: (p.get("sort") as ModelFilters["sort"]) || "live-first",
     };
 
     const all = queryModels(filters);
