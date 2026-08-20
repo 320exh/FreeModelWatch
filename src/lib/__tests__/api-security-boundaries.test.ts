@@ -156,9 +156,17 @@ describe("API Route Security Boundaries", () => {
       expect(json.ok).toBe(true);
     });
 
-    it("GET request (read-only) works without credentials", async () => {
+    it("GET request rejects request without credentials (401)", async () => {
       const { GET } = await import("@/app/api/admin/collect/openrouter/route");
-      const res = await GET();
+      const req = createRequest({ method: "GET" });
+      const res = await GET(req);
+      expect(res.status).toBe(401);
+    });
+
+    it("GET request works with valid credentials", async () => {
+      const { GET } = await import("@/app/api/admin/collect/openrouter/route");
+      const req = createRequest({ method: "GET", auth: validAuthHeader });
+      const res = await GET(req);
       expect(res.status).toBe(200);
     });
   });
@@ -223,9 +231,17 @@ describe("API Route Security Boundaries", () => {
       expect(json.ok).toBe(true);
     });
 
-    it("GET request (read-only) works without credentials", async () => {
+    it("GET request rejects request without credentials (401)", async () => {
       const { GET } = await import("@/app/api/admin/collect/gemini/route");
-      const res = await GET();
+      const req = createRequest({ method: "GET" });
+      const res = await GET(req);
+      expect(res.status).toBe(401);
+    });
+
+    it("GET request works with valid credentials", async () => {
+      const { GET } = await import("@/app/api/admin/collect/gemini/route");
+      const req = createRequest({ method: "GET", auth: validAuthHeader });
+      const res = await GET(req);
       expect(res.status).toBe(200);
     });
   });

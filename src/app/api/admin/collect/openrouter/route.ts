@@ -43,6 +43,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const username = await verifyBasicAuth(req.headers.get("authorization"));
+  if (!username) {
+    return unauthorizedResponse();
+  }
   return NextResponse.json({ runs: getLastCollectorRuns(20) });
 }
