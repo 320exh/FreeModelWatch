@@ -1,0 +1,4 @@
+# Normalize line endings: store all text files with LF in the repository.
+# Git auto-detects binary files (e.g. images, archives) via NUL-byte scanning
+# and leaves them untouched, so no binary artifact is ever normalized or corrupted.
+* text=auto
