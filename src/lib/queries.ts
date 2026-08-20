@@ -594,6 +594,7 @@ export interface ModelFilters {
   apiKeyRequired?: boolean | null;
   minContext?: number;
   verified?: VerificationConfidence[];
+  origin?: DataOrigin[];
   sort?: "relevance" | "context" | "coding" | "recent" | "freshness" | "reliability";
 }
 
@@ -619,6 +620,10 @@ export function queryModels(f: ModelFilters): ModelView[] {
   }
   if (f.verified && f.verified.length) {
     views = views.filter((m) => f.verified!.includes(m.bestConfidence));
+  }
+  if (f.origin && f.origin.length) {
+    const origins = f.origin;
+    views = views.filter((m) => m.routes.some((r) => origins.includes(r.availability.dataOrigin as DataOrigin)));
   }
   if (f.coding) views = views.filter((m) => (m.codingCapability ?? 0) >= 4);
   if (f.reasoning) views = views.filter((m) => m.reasoningSupport);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { queryModels, getAllProviders, getAllHarnesses, type ModelFilters, type ModelView } from "@/lib/queries";
 import { serializeModelView } from "@/lib/api";
-import type { AccessType, VerificationConfidence, FreshnessTier } from "@/lib/types";
+import type { AccessType, VerificationConfidence, FreshnessTier, DataOrigin } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,6 +10,7 @@ const KNOWN_ACCESS: AccessType[] = [
   "completely_free", "free_tier", "free_credits", "free_with_limits",
   "free_through_aggregator", "free_through_harness", "free_local", "temporarily_free", "community_unofficial", "direct_api",
 ];
+const KNOWN_ORIGIN: DataOrigin[] = ["seed", "production", "user_report", "live_collector"];
 const KNOWN_CONF: VerificationConfidence[] = ["verified", "likely", "unverified", "stale"];
 
 // Convenience aliases (req 17) so callers can use short/intuitive tokens.
@@ -70,6 +71,7 @@ export function GET(req: Request) {
       q: p.get("q")?.trim() || undefined,
       access: expandAccessAliases(p.get("access")),
       verified: csv<VerificationConfidence>(p.get("verified"), KNOWN_CONF),
+      origin: csv<DataOrigin>(p.get("origin"), KNOWN_ORIGIN),
       coding: boolParam(p.get("coding")) ?? false,
       reasoning: boolParam(p.get("reasoning")) ?? false,
       vision: boolParam(p.get("vision")) ?? false,
