@@ -334,4 +334,73 @@ PowerShell helper, so tokens never enter source, commits, or chat.
 - **Rules:** never paste Cloudflare token values into source code, documentation, commits, or
   chat; never commit `.env.local`.
 - **Lost credentials?** Inspect the persistent `.env.local` setup (and the profile dot-source)
-  **before** creating new tokens. No token values are kept in this repository.
+   **before** creating new tokens. No token values are kept in this repository.
+
+## 12. Git-based deployment & CI
+
+The repository on GitHub (`main`) is the **source of truth**. Production is a
+Git-tracked checkout of `origin/main` at `/opt/freeai` — it is **not** updated with
+`scp`.
+
+### 12.1 Development
+
+```text
+edit
+→ npm test            # verified vitest suite; no secrets required
+→ git commit
+→ git push origin main
+```
+
+Every push to `main` (and every PR against `main`) triggers GitHub Actions CI
+(`.github/workflows/ci.yml`), which installs dependencies with `npm ci` and runs
+`npm test`. A red run means the suite failed — fix locally and re-push. CI needs no
+production secrets; the test suite mocks external services.
+
+### 12.2 Production update (Git pull, not scp)
+
+The server's working tree tracks `origin/main`. Deploy a new commit with:
+
+```bash
+cd /opt/freeai
+git fetch origin
+git reset --hard origin/main
+```
+
+`reset --hard` rewrites only tracked files. These **server-only** resources are left
+untouched (Git does not manage them):
+
+- `.env.local` — server-only secrets (never committed, never in CI)
+- `data/freeai.db` — the server-local SQLite database
+- `freeai.timer` / `freeai-collect.service` — server-local scheduler units
+- Caddy (`/etc/caddy/Caddyfile`) and Cloudflare — server-side, outside the repo
+
+#### When is a rebuild/restart required?
+
+Only for **application source changes**:
+
+```bash
+npm run build
+sudo systemctl restart freeai
+```
+
+Documentation-only or CI-infrastructure commits (e.g. `DEPLOY.md`, `.github/`) do
+**not** require a rebuild or restart — the running app is unaffected.
+
+### 12.3 Scheduler (verified)
+
+- **`freeai.timer`** — `OnCalendar=hourly`, `Persistent=true` (catches up a missed
+  tick after downtime). Enabled and active.
+- **`freeai-collect.service`** — `Type=oneshot`, runs `npm run collect:all`
+  (OpenRouter + Gemini + Groq, failure-isolated, idempotent upserts). See §5–§7 for
+  the full unit definitions.
+- **`flock` overlap protection** — `flock -n /opt/freeai/data/.collect.lock` so two
+  ticks can never run concurrently.
+- After a **successful** collect (exit 0), the unit's `ExecStartPost` runs
+  `systemctl restart freeai`, clearing the web process's in-memory route cache (§6).
+  A failed or locked-out run does **not** restart the web service.
+- **Inspect status / logs:**
+  ```bash
+  systemctl status freeai.timer freeai-collect.service freeai
+  systemctl list-timers freeai.timer
+  journalctl -u freeai-collect.service -u freeai --since "2 hours ago"
+  ```
