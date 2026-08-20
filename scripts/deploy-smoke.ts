@@ -203,11 +203,15 @@ function systemdCheck(unit: string) {
     const content = readFileSync(unitFile, "utf-8");
     const okPre = /ExecStartPre=.*mkdir/.test(content);
     const okStart = /ExecStart=.*flock .*\.collect\.lock.*collect:all/.test(content);
-    const okPost = /ExecStartPost=.*systemctl restart/.test(content);
+    // The collector must restart the web service after a successful run so the in-memory route
+    // cache is cleared. Production performs this inline in ExecStart (best-effort
+    // `systemctl restart freeai` on collect success); some setups use ExecStartPost instead.
+    // Accept either spelling.
+    const okRestart = /systemctl restart freeai/.test(content);
     const pre = okPre ? "ExecStartPre mkdir present" : "ExecStartPre mkdir MISSING";
     const start = okStart ? "flock+collect:all present" : "flock+collect:all MISSING";
-    const post = okPost ? "ExecStartPost restart present" : "ExecStartPost restart MISSING";
-    pass("systemd:collector-unit-structure", `${pre}; ${start}; ${post}`);
+    const restart = okRestart ? "restart-on-success present" : "restart-on-success MISSING";
+    pass("systemd:collector-unit-structure", `${pre}; ${start}; ${restart}`);
   } else {
     skip("systemd:collector-unit-structure", `${unitFile} not found`);
   }

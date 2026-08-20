@@ -108,6 +108,17 @@ only in their official sources, their `free` classification rule, and how they h
 publish a fixed public grid). The admin UI (CollectorRunner), CLI, and `adminRunCollector`
 action run either collector independently.
 
+The **Groq collector** (`collectors/groq.ts` + `runGroqCollector`) is the **third** real
+collector. It is the first to use a **hybrid source strategy**: it cross-checks Groq's live model
+catalog (`GET https://api.groq.com/openai/v1/models`, keyed) against Groq's official Free Plan
+rate-limits doc (`https://console.groq.com/docs/rate-limits`) and classifies a model free only
+when it is active in the catalog **and** listed as free by the provider. Like Gemini it is a
+**direct provider API free tier** (`access_type = direct_api`); like both peers it imports
+through the same `DbCollectorSink` and obeys the identical failure-safety / idempotency /
+change-detection contract. Without `GROQ_API_KEY` it falls back to a bundled frozen snapshot
+(`GROQ_FREE_TIER`). All three collectors are invoked by `collect:all`, the CLI, and the
+`adminRunCollector` action (Groq via the action/UI — it has no separate REST endpoint).
+
 ## Known limitations / future work
 - User watchlists/alerts (the earlier design draft's `user_watchlist`) are not implemented.
 - The verification queue is computed on read; for very large datasets it could be

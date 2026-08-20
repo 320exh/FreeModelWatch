@@ -132,16 +132,19 @@ WantedBy=multi-user.target
 WorkingDirectory=/opt/freeai
 EnvironmentFile=/opt/freeai/.env.local
 Type=oneshot
+User=ubuntu
 # Ensure the persistent data directory exists BEFORE flock opens the lock file,
 # so a fresh-host timer tick can never fail on a missing data/ dir.
 ExecStartPre=/usr/bin/mkdir -p /opt/freeai/data
-ExecStart=/usr/bin/flock -n /opt/freeai/data/.collect.lock /usr/bin/npm run collect:all
-ExecStartPost=/usr/bin/systemctl restart freeai
+# Overlap protection via flock. Collect, then refresh the web server's route cache
+# by restarting it ONLY when collection succeeded (best-effort restart).
+ExecStart=/usr/bin/flock -n /opt/freeai/data/.collect.lock /bin/bash -c 'cd /opt/freeai && /usr/bin/npm run collect:all; rc=$?; if [ $rc -eq 0 ]; then /usr/bin/sudo /usr/bin/systemctl restart freeai || true; fi; exit $rc'
 ```
 
-**Restart semantics (matches the route-cache boundary in §6):** for a `Type=oneshot` unit,
-`ExecStartPost` runs **only if** `ExecStart` (the `flock` + `collect:all` command) exits
-**0**. So:
+**Restart semantics (matches the route-cache boundary in §6):** the `ExecStart` runs
+`collect:all` under a `flock`, captures its exit code, and restarts `freeai` **only if** the
+collect exited **0** (the restart is best-effort — `|| true` — so a restart failure never masks a
+successful collect). So:
 - a **successful/partial** collect (exit 0) → `freeai` is restarted, clearing the stale
   in-memory route cache;
 - a **failed** collect (non-zero) or a **locked-out** `flock -n` (non-zero) → the unit is

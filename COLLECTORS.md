@@ -2,7 +2,9 @@
 
 This document is the contract for FreeAI.today's automated data collectors. The **OpenRouter
 collector** (`src/lib/collectors/openrouter.ts`) is the first live collector and is the
-**reference template** for every provider that follows.
+**reference template** for every provider that follows. Two further live collectors —
+**Gemini / Google AI Studio** (`gemini.ts`) and **Groq** (`groq.ts`) — follow the same contract
+and are documented below.
 
 > Other providers in the app (OpenAI, Anthropic, Google, etc.) may still contain **seed/demo
 > data** only. Seed data is curated for the UI but is explicitly *not* live-verified.
@@ -87,6 +89,75 @@ multiple official pages:
 
 This matches the app's "one claim, multiple evidence sources" model (see DATA_VERIFICATION.md).
 
+## How to run the Groq collector
+
+```bash
+# LIVE — writes to the database (data_origin = 'live_collector')
+npm run collect:groq
+
+# DRY RUN — fetches + normalizes, reports what would change, writes nothing
+npm run collect:groq:dry
+
+# Or programmatically
+import { runGroqCollector } from "@/lib/collectors/run";
+await runGroqCollector({ dryRun: false });
+
+# Optional: live discovery against the real model list (requires a key)
+GROQ_API_KEY=xxx npm run collect:groq
+```
+
+The Groq collector is the **third** live collector. Like Gemini, it proves a **direct provider
+API free tier** (`access_type = direct_api`) — a distinct product from both the aggregator
+(OpenRouter) and Google's Gemini API. It is the first collector to use a **hybrid source
+strategy**: it correlates Groq's live model catalog with Groq's official Free Plan rate-limits
+documentation to decide which models are free, rather than trusting a single source.
+
+> Without `GROQ_API_KEY`, the collector falls back to a clearly-labeled, frozen snapshot of
+> Groq's free-tier catalog (`GROQ_FREE_TIER`) so it is runnable anywhere. Set the key for true
+> live discovery (`GET https://api.groq.com/openai/v1/models` requires it).
+
+### How Groq "free" is classified
+
+Groq exposes **no pricing API** — its free tier is defined by the official **Free Plan**
+rate-limits page (`https://console.groq.com/docs/rate-limits`). The collector therefore
+cross-checks two authoritative, independent sources:
+
+1. **Live catalog** (`GET https://api.groq.com/openai/v1/models`, `GROQ_API_KEY` required) —
+   authoritative for *which models exist* and their `active` flag, context window, and created
+   date. It carries **no** pricing or free-tier information.
+2. **Free Plan doc** (`https://console.groq.com/docs/rate-limits`, scraped) — authoritative for
+   *which models are free* and their per-model free-tier RPM/TPM/RPD limits.
+
+A model is classified **free** only when it is **active in the live catalog AND listed in the
+Free Plan doc**. Anything only in the catalog (no free-tier evidence) is left **unknown** — the
+collector never asserts it is free. Anything only in the doc but absent/inactive in the catalog is
+treated as stale/removed and is **not emitted**. This is the inverse of OpenRouter's
+"all usage dimensions == 0" rule: Groq's rule is "explicitly listed as free by the provider,
+confirmed live."
+
+### Groq limits: what we capture vs. what we DON'T invent
+
+Groq's Free Plan doc publishes a **per-model free-tier rate grid** (RPM / TPM / RPD). The
+collector captures these where the doc lists them:
+
+- `rate_limit_rpm` → Free Plan RPM (captured from the doc)
+- `rate_limit_tpm` → Free Plan TPM (captured from the doc)
+- `daily_limit` → Free Plan RPD (captured from the doc)
+- `context_window` → captured from the live `models` API (real, per-model limit)
+- `max_output_tokens` → **null** (Groq does not publish a fixed public output-token cap)
+
+Free routes are stored with `requires_payment_method = 0` (Free tier needs no credit card) and
+`requires_api_key = 1` / `requires_signup = 1`.
+
+### Groq sources
+
+Each imported route links to **two** official sources, because the free claim spans two pages:
+
+- `src-groq-models` — model catalog (`GET /v1/models`)
+- `src-groq-rate-limits` — Free Plan rate-limits / free-tier definition
+
+This matches the app's "one claim, multiple evidence sources" model (see DATA_VERIFICATION.md).
+
 ## How often should it run?
 
 OpenRouter's free catalog changes frequently (models added, promoted, or removed). A reasonable
@@ -124,6 +195,12 @@ The model detail page surfaces this explicitly so users never read "free" as "un
 > collector captures it as `rate_limit_tpm` and links the rate-limits source. The per-minute
 > request (RPM) and daily request (RPD) limits remain dynamic per usage tier and are stored as
 > `null` (unknown), never invented.
+
+> **Groq exception:** Groq publishes no per-token *pricing*; its Free Plan doc instead defines a
+> per-model free-tier rate grid (RPM/TPM/RPD). The Groq collector classifies a model free only when
+> it is **active in the live catalog AND listed in the Free Plan doc** (a positive-evidence rule),
+> and captures the published free-tier RPM/TPM/RPD. This is the inverse of OpenRouter's
+> all-dimensions-zero rule.
 
 ## What the collector CAN and CANNOT determine
 

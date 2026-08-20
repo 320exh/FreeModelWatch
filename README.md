@@ -30,8 +30,9 @@ The database is seeded from `src/lib/seed-data.ts` + `src/lib/seed-availability.
 `seedDatabase()`. Seeded rows are marked `data_origin = 'seed'` so the UI shows them as
 **demo data**, never as "live verified". Real data should be entered through the admin
 verification workflow (`/admin`) or automated collectors (see `src/lib/collectors/` and
-`COLLECTORS.md`). Two live collectors exist: **OpenRouter** (`free_through_aggregator`) and
-**Gemini / Google AI Studio** (`direct_api`). A live collector writes
+`COLLECTORS.md`). Three live collectors exist: **OpenRouter** (`free_through_aggregator`, an
+aggregator), **Gemini / Google AI Studio** (`direct_api`), and **Groq** (`direct_api`, a direct
+provider API free tier). A live collector writes
 `data_origin = 'live_collector'` (auto, **not** human-verified) and
 `verification_confidence = 'likely'`. Only an explicit admin verification
 promotes a row to `data_origin = 'production'` / `verification_confidence = 'verified'` — the
@@ -106,7 +107,10 @@ const password = 'your-strong-password';
 - `/admin` and all `/admin/*` routes are protected by middleware.
 - All mutating server actions (`markVerified`, `adminVerifyRoute`, `addAvailability`, `reportChange`, `adminRunCollector`) independently verify credentials via `requireAdmin()`.
 - `POST /api/admin/collect/openrouter` and `POST /api/admin/collect/gemini` require authentication.
+  **Groq has no separate REST endpoint** — it is triggered from the admin UI (`/admin` → "Live
+  Collectors") via the `adminRunCollector` server action.
 - `GET /api/admin/collect/*` (read-only status) remain accessible.
-- CLI collector execution (`npm run collect:openrouter`, `npm run collect:gemini`) bypasses HTTP auth and works directly.
+- CLI collector execution (`npm run collect:openrouter`, `npm run collect:gemini`,
+  `npm run collect:groq`) bypasses HTTP auth and works directly.
 - The authenticated username becomes `verified_by` on all mutations; collector identities (`collector:openrouter`, `collector:gemini`) are preserved for automated runs.
 - **Never deploy without HTTPS** — Basic Auth sends credentials on every request.
