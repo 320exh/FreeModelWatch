@@ -1,6 +1,8 @@
 import { runOpenRouterCollector, runGeminiCollector, runGroqCollector, formatRunReport } from "./run";
+import { loadEnv } from "./loadEnv";
 
 async function main() {
+  loadEnv();
   const args = process.argv.slice(2);
   const collectorArg = args.find((a) => a.startsWith("--collector="))?.split("=")[1] ?? args[0] ?? "openrouter";
   const dryRun = args.includes("--dry-run");

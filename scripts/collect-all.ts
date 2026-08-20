@@ -4,6 +4,7 @@ import {
   formatRunReport,
   type CollectorRunReport,
 } from "../src/lib/collectors/run";
+import { loadEnv } from "../src/lib/collectors/loadEnv";
 
 export type CollectorFn = () => Promise<CollectorRunReport>;
 
@@ -49,6 +50,7 @@ const isMain =
   process.argv[1].endsWith("collect-all.ts");
 
 if (isMain) {
+  loadEnv();
   const dryRun = process.argv.includes("--dry-run");
   runAll({ dryRun })
     .then((code) => process.exit(code))

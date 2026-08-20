@@ -656,18 +656,27 @@ export async function runGroqCollector(opts: RunOptions = {}): Promise<Collector
   };
 
   let rawModels: GroqModel[];
+  const apiKey = opts.apiKey ?? process.env.GROQ_API_KEY;
   try {
-    const apiKey = opts.apiKey ?? process.env.GROQ_API_KEY;
     if (apiKey) {
-      report.warnings.push(
-        "GROQ_API_KEY detected but live discovery is not implemented in this prototype — using the bundled official snapshot."
-      );
+      const prepared = await collector.prepareLive(apiKey);
+      if (prepared.status === "ok") {
+        report.warnings.push(
+          "Live Groq discovery via /v1/models (catalog) + parsed official Free Plan rate-limits."
+        );
+        rawModels = collector.getCatalogModels();
+      } else {
+        report.warnings.push(
+          `Live Groq discovery failed (${prepared.error ?? "unknown"}) — using the bundled official snapshot.`
+        );
+        rawModels = GROQ_CATALOG_SNAPSHOT;
+      }
     } else {
       report.warnings.push(
         "No GROQ_API_KEY set — using the bundled official model snapshot instead of live discovery."
       );
+      rawModels = GROQ_CATALOG_SNAPSHOT;
     }
-    rawModels = GROQ_CATALOG_SNAPSHOT;
   } catch (err) {
     report.status = "failed";
     report.errorMessage = err instanceof Error ? err.message : String(err);
@@ -743,7 +752,7 @@ export async function runGroqCollector(opts: RunOptions = {}): Promise<Collector
         report.warnings.push("Skipped catalog entry with no name.");
         continue;
       }
-      normalized.push(normalizeGroqModel(raw));
+      normalized.push(collector.normalizeRecord(raw));
     } catch (err) {
       report.errors.push(`Normalize failed for ${raw?.name ?? "?"}: ${err instanceof Error ? err.message : String(err)}`);
     }
