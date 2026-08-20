@@ -6,7 +6,9 @@
  * checks are opt-in via flags so this can be run against a live production host
  * without churning state.
  *
- * Usage (run from the project root, with the same env as the deployed app):
+ * Usage (run from the project root). On a systemd host it inspects the deployed
+ * unit's configured environment (EnvironmentFile / Environment), so it does not
+ * depend on the interactive shell having the variables exported:
  *   npm run smoke:deploy -- --base-url http://localhost:3000
  *   npm run smoke:deploy -- --collector --restart --admin-password '<plaintext>'
  *
@@ -69,21 +71,75 @@ async function httpStatus(url: string, headers?: Record<string, string>): Promis
   return res.status;
 }
 
-function envCheck() {
-  const required = ["ADMIN_PASSWORD_HASH"];
-  const optional = ["ADMIN_USERNAME", "SITE_URL", "GEMINI_API_KEY", "FREEAI_DB_PATH"];
-  let ok = true;
-  for (const k of required) {
-    if (hasFlag(process.env[k])) pass(`env:${k}`, "present");
-    else {
-      fail(`env:${k}`, "MISSING — required for production admin auth");
-      ok = false;
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Parse a var name into a regex-safe string.
+// Resolve the environment-file paths the systemd unit actually loads. This is the
+// source of truth for what the deployed service sees — independent of whether the
+// variable happens to be exported into the interactive shell running this script.
+function serviceEnvFiles(unit: string): string[] {
+  const r = spawnSync("systemctl", ["show", unit, "-p", "EnvironmentFiles", "-p", "EnvironmentFile"], {
+    encoding: "utf-8",
+  });
+  if (r.status !== 0) return [];
+  const files: string[] = [];
+  for (const line of (r.stdout || "").split("\n")) {
+    const m = line.match(/^(?:EnvironmentFiles|EnvironmentFile)=(.*)$/);
+    if (!m) continue;
+    const val = m[1].trim();
+    if (!val) continue;
+    // Tokens are space-separated; each may carry a "(ignore_errors=...)" suffix.
+    for (const tok of val.split(/\s+/)) {
+      const path = tok.replace(/\(.*\)$/, "").trim();
+      if (path.startsWith("/")) files.push(path);
     }
   }
-  for (const k of optional) {
-    pass(`env:${k}`, hasFlag(process.env[k]) ? "present" : "unset (optional)");
+  return [...new Set(files)];
+}
+
+// Check a var is declared (with a non-empty value) in an env file — WITHOUT reading/printing the value.
+function envFileHasVar(file: string, name: string): boolean {
+  if (!existsSync(file)) return false;
+  const content = readFileSync(file, "utf-8");
+  const re = new RegExp(`(?:^|\\n)\\s*${escapeRegex(name)}\\s*=\\s*\\S`);
+  return re.test(content);
+}
+
+function envCheck(unit: string) {
+  const required = ["ADMIN_PASSWORD_HASH"];
+  const optional = ["ADMIN_USERNAME", "SITE_URL", "GEMINI_API_KEY", "FREEAI_DB_PATH"];
+
+  // Where the deployed service actually sources its environment from.
+  const envFiles = serviceEnvFiles(unit);
+  let inlineEnv = "";
+  const envR = spawnSync("systemctl", ["show", unit, "-p", "Environment"], { encoding: "utf-8" });
+  if (envR.status === 0) {
+    for (const line of (envR.stdout || "").split("\n")) {
+      if (line.startsWith("Environment=")) inlineEnv += " " + line.slice("Environment=".length);
+    }
   }
-  return ok;
+
+  // Returns the source the var is configured in, or null. Never exposes the value.
+  const configured = (name: string): string | null => {
+    if (hasFlag(process.env[name])) return "process environment";
+    if (new RegExp(`(?:^|\\s)${escapeRegex(name)}=(?=\\s|$)`).test(inlineEnv)) return "systemd Environment=";
+    for (const f of envFiles) {
+      if (envFileHasVar(f, name)) return `systemd EnvironmentFile (${f})`;
+    }
+    return null;
+  };
+
+  for (const k of required) {
+    const where = configured(k);
+    if (where) pass(`env:${k}`, `present (${where})`);
+    else fail(`env:${k}`, "MISSING — required for production admin auth");
+  }
+  for (const k of optional) {
+    const where = configured(k);
+    pass(`env:${k}`, where ? `present (${where})` : "unset (optional)");
+  }
 }
 
 async function httpChecks(baseUrl: string) {
@@ -247,7 +303,7 @@ async function main() {
   const baseUrl = args["base-url"] ?? process.env.SMOKE_BASE_URL ?? "http://localhost:3000";
   const unit = args.unit ?? "freeai";
 
-  envCheck();
+  envCheck(unit);
   await httpChecks(baseUrl);
   const before = await dbReadable(baseUrl);
   await liveProviderData(baseUrl);
