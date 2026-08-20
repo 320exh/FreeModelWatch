@@ -112,4 +112,4 @@ action run either collector independently.
 - User watchlists/alerts (the earlier design draft's `user_watchlist`) are not implemented.
 - The verification queue is computed on read; for very large datasets it could be
   materialized, but current volumes don't need it.
-- Admin auth is not implemented (see `CONTRIBUTING.md`).
+- Admin authentication is implemented via HTTP Basic Auth (see `CONTRIBUTING.md` → `ADMIN_SECURITY`); admin endpoints are not open.

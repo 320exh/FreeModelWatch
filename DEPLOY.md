@@ -13,10 +13,9 @@ exact commands. Architecture decisions are closed — see `docs/HANDOFF.md` §14
   `next start`). The app uses the built-in `node:sqlite`; there are no extra native
   dependencies.
 
-  > **Production note (non-blocking maintenance):** the live deployment currently runs
-  > **Node v22.23.2** (the 22.13+ line, so `node:sqlite` works unflagged). DEPLOY.md recommends
-  > Node ≥ 24; an upgrade to ≥ 24 is a tracked future task, not done yet. Do not upgrade Node as
-  > part of documentation/config work.
+  > **Production note:** the live deployment currently runs **Node v24.19.0** (the ≥ 24 line, so
+  > `node:sqlite` is unflagged and stable). This satisfies the DEPLOY.md ≥ 24 recommendation. Do
+  > not change the Node version as part of documentation/config work.
 - **npm** (ships with Node). A `package-lock.json` is committed, so `npm ci` is reproducible.
 - A **writable, persistent directory** for the database (default `data/` under the project
   root). Back this volume up — it is the only stateful store.
@@ -302,8 +301,8 @@ the Cloudflare dashboard or `scripts/cloudflare.ps1` (§11).
 Tracked future tasks. None block the current healthy deployment; do not fix as part of
 documentation/config work.
 
-1. **Node upgrade.** Production runs Node v22.23.2; DEPLOY.md recommends Node ≥ 24. Plan an
-   upgrade to ≥ 24 (verify `node:sqlite` + `next build` first). See §1.
+1. **Node upgrade.** RESOLVED — production now runs **Node v24.19.0**, satisfying the DEPLOY.md
+   ≥ 24 recommendation (verified `node:sqlite` + `next build`). No further upgrade pending.
 2. **Caddyfile formatting.** Run `caddy fmt` on `/etc/caddy/Caddyfile` to normalize formatting.
    Cosmetic; no behavioral change intended.
 3. **`Server Reference ID did not match` errors.** Monitor for recurrence of the transient

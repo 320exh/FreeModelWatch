@@ -66,7 +66,7 @@ Protected surfaces:
 - `/admin` and `/admin/*` — middleware enforces Basic Auth
 - All mutating server actions in `actions.ts` — each calls `requireAdmin()` at entry
 - `POST /api/admin/collect/openrouter` and `POST /api/admin/collect/gemini` — explicit auth check
-- `GET /api/admin/collect/*` — read-only, no auth required
+- `GET /api/admin/collect/openrouter` and `GET /api/admin/collect/gemini` — read-only (recent run history); **require Basic Auth** (401 without credentials).
 
 The authenticated username is written to `verified_by` on all mutations.
 Collector identities (`collector:openrouter`, `collector:gemini`) are preserved for automated CLI runs.
