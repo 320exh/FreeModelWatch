@@ -2,7 +2,7 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { getDb } from "./db";
+import { getDb, withTransaction } from "./db";
 import { getAvailability } from "./queries";
 import { invalidateRouteCache } from "./intelligence";
 import { runOpenRouterCollector, runGeminiCollector, runGroqCollector, type CollectorRunReport } from "./collectors/run";
@@ -140,32 +140,34 @@ export async function markVerified(formData: FormData | Record<string, any>) {
   const prevStatus = row.status;
   const newStatus = prevStatus === "unavailable" ? "available" : prevStatus;
 
-  db.prepare(
-    `UPDATE availability
-     SET last_verified_at = ?, verification_confidence = 'verified', verification_method = 'manual',
-         data_origin = 'production', status = ?, verified_by = ?
-     WHERE id = ?`
-  ).run(today(), newStatus, verifiedBy, availabilityId);
+  withTransaction(() => {
+    db.prepare(
+      `UPDATE availability
+       SET last_verified_at = ?, verification_confidence = 'verified', verification_method = 'manual',
+           data_origin = 'production', status = ?, verified_by = ?
+       WHERE id = ?`
+    ).run(today(), newStatus, verifiedBy, availabilityId);
 
-  appendVerificationHistory({
-    availabilityId,
-    modelId: row.model_id,
-    providerId: row.provider_id,
-    verifiedBy,
-    previousConfidence: prevConfidence,
-    previousStatus: prevStatus,
-    newConfidence: "verified",
-    newStatus,
-  });
-  recordChange({
-    entityType: "availability",
-    entityId: availabilityId,
-    fieldChanged: "verification",
-    oldValue: `${prevConfidence}/${prevStatus}`,
-    newValue: `verified/${newStatus}`,
-    changeSource: "admin_verify",
-    verifiedBy,
-    notes: "Administratively verified against linked source(s).",
+    appendVerificationHistory({
+      availabilityId,
+      modelId: row.model_id,
+      providerId: row.provider_id,
+      verifiedBy,
+      previousConfidence: prevConfidence,
+      previousStatus: prevStatus,
+      newConfidence: "verified",
+      newStatus,
+    });
+    recordChange({
+      entityType: "availability",
+      entityId: availabilityId,
+      fieldChanged: "verification",
+      oldValue: `${prevConfidence}/${prevStatus}`,
+      newValue: `verified/${newStatus}`,
+      changeSource: "admin_verify",
+      verifiedBy,
+      notes: "Administratively verified against linked source(s).",
+    });
   });
 
   invalidateRouteCache();
@@ -273,23 +275,25 @@ export async function addAvailability(formData: FormData | Record<string, any>) 
   const sourceUrl = str(fields["sourceUrl"]) || null;
   const id = `${modelId}__${providerId}`;
   const db = getDb();
-  db.prepare(
-    `INSERT OR IGNORE INTO availability
-     (id, model_id, provider_id, harness_id, access_type, free_quota_value, free_quota_unit, free_quota_period,
-       requires_payment_method, payment_requirement_known, requires_api_key, requires_signup, status, is_active, source_url, last_verified_at,
-       verification_method, verification_confidence, data_origin, verified_by)
-     VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1, 1, ?, 1, ?, ?, 'manual', 'likely', 'production', ?)`
-  ).run(id, modelId, providerId, accessType, freeQuotaValue, freeQuotaUnit, freeQuotaPeriod, requiresPaymentMethod ? 1 : 0, paymentRequirementKnown ? 1 : 0, status, sourceUrl || null, today(), verifiedBy);
+  withTransaction(() => {
+    db.prepare(
+      `INSERT OR IGNORE INTO availability
+       (id, model_id, provider_id, harness_id, access_type, free_quota_value, free_quota_unit, free_quota_period,
+         requires_payment_method, payment_requirement_known, requires_api_key, requires_signup, status, is_active, source_url, last_verified_at,
+         verification_method, verification_confidence, data_origin, verified_by)
+       VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, 1, 1, ?, 1, ?, ?, 'manual', 'likely', 'production', ?)`
+    ).run(id, modelId, providerId, accessType, freeQuotaValue, freeQuotaUnit, freeQuotaPeriod, requiresPaymentMethod ? 1 : 0, paymentRequirementKnown ? 1 : 0, status, sourceUrl || null, today(), verifiedBy);
 
-  recordChange({
-    entityType: "availability",
-    entityId: id,
-    fieldChanged: "added",
-    newValue: accessType,
-    changeSource: "admin_add",
-    sourceUrl: sourceUrl || null,
-    verifiedBy,
-    notes: "Manually added free-access route.",
+    recordChange({
+      entityType: "availability",
+      entityId: id,
+      fieldChanged: "added",
+      newValue: accessType,
+      changeSource: "admin_add",
+      sourceUrl: sourceUrl || null,
+      verifiedBy,
+      notes: "Manually added free-access route.",
+    });
   });
 
   invalidateRouteCache();
@@ -316,16 +320,18 @@ export async function reportChange(formData: FormData | Record<string, any>) {
     if (a) oldValue = `${a.status}/${a.accessType}`;
   }
 
-  recordChange({
-    entityType,
-    entityId,
-    fieldChanged,
-    oldValue,
-    newValue,
-    changeSource: "user_report",
-    sourceUrl,
-    verifiedBy,
-    notes,
+  withTransaction(() => {
+    recordChange({
+      entityType,
+      entityId,
+      fieldChanged,
+      oldValue,
+      newValue,
+      changeSource: "user_report",
+      sourceUrl,
+      verifiedBy,
+      notes,
+    });
   });
   safeRevalidate("/admin");
   safeRevalidate("/changes");

@@ -1,4 +1,4 @@
-import { getDb } from "../db";
+import { getDb, withTransaction } from "../db";
 import {
   OPENROUTER_PROVIDER_ID,
   OPENROUTER_SOURCE_ID,
@@ -256,6 +256,7 @@ export class DbCollectorSink implements CollectorSink {
     m: NormalizedModelRow,
     opts?: { sourceUrl?: string; sourceNotes?: string }
   ): { added: boolean; changed: boolean; changedFields: string[] } {
+    return withTransaction(() => {
     const db = getDb();
     const existing = db.prepare("SELECT * FROM models WHERE id = ?").get(m.id) as any;
     if (!existing) {
@@ -335,6 +336,7 @@ export class DbCollectorSink implements CollectorSink {
     }
     invalidateRouteCache();
     return { added: false, changed: true, changedFields: changes };
+    });
   }
 
   upsertAvailabilityRow(a: NormalizedAvailabilityRow, sourceId: string): {
@@ -342,6 +344,7 @@ export class DbCollectorSink implements CollectorSink {
     changed: boolean;
     reactivated: boolean;
   } {
+    return withTransaction(() => {
     const db = getDb();
     const existing = db.prepare("SELECT * FROM availability WHERE id = ?").get(a.id) as any;
 
@@ -490,9 +493,11 @@ export class DbCollectorSink implements CollectorSink {
     }
     invalidateRouteCache();
     return { added: false, changed: changes.length > 0 || reactivated, reactivated };
+    });
   }
 
   markRemoved(availabilityId: string, reason?: string, sourceUrl?: string): boolean {
+    return withTransaction(() => {
     const db = getDb();
     const existing = db.prepare("SELECT * FROM availability WHERE id = ?").get(availabilityId) as any;
     if (!existing || existing.is_active !== 1) return false;
@@ -536,6 +541,7 @@ export class DbCollectorSink implements CollectorSink {
     });
     invalidateRouteCache();
     return true;
+    });
   }
 
   recordRun(run: {

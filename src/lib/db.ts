@@ -286,6 +286,19 @@ export function getDb(): any {
   return g.__freeaiDb;
 }
 
+export function withTransaction<T>(fn: () => T): T {
+  const db = getDb();
+  db.exec("BEGIN");
+  try {
+    const result = fn();
+    db.exec("COMMIT");
+    return result;
+  } catch (err) {
+    db.exec("ROLLBACK");
+    throw err;
+  }
+}
+
 export function isSeeded(): boolean {
   const db = getDb();
   const row = db.prepare("SELECT COUNT(*) AS c FROM models").get() as { c: number };
