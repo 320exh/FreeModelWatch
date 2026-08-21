@@ -156,6 +156,18 @@ describe("API Route Security Boundaries", () => {
       expect(json.ok).toBe(true);
     });
 
+    it("rejects request whose Referer is on a string-prefix attacker domain (CSRF 403)", async () => {
+      const { POST } = await import("@/app/api/admin/collect/openrouter/route");
+      const req = createRequest({
+        auth: validAuthHeader,
+        referer: "https://example.com.evil.com/x",
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(403);
+      const json = await res.json();
+      expect(json.error).toContain("CSRF");
+    });
+
     it("GET request rejects request without credentials (401)", async () => {
       const { GET } = await import("@/app/api/admin/collect/openrouter/route");
       const req = createRequest({ method: "GET" });
@@ -229,6 +241,18 @@ describe("API Route Security Boundaries", () => {
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.ok).toBe(true);
+    });
+
+    it("rejects request whose Referer is on a string-prefix attacker domain (CSRF 403)", async () => {
+      const { POST } = await import("@/app/api/admin/collect/gemini/route");
+      const req = createRequest({
+        auth: validAuthHeader,
+        referer: "https://example.com.evil.com/x",
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(403);
+      const json = await res.json();
+      expect(json.error).toContain("CSRF");
     });
 
     it("GET request rejects request without credentials (401)", async () => {

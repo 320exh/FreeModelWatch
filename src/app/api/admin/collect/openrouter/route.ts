@@ -3,19 +3,26 @@ import { runOpenRouterCollector } from "@/lib/collectors/run";
 import { getLastCollectorRuns } from "@/lib/queries";
 import { verifyBasicAuth, unauthorizedResponse } from "@/lib/auth";
 
+function originOf(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
 function validateSameOrigin(req: NextRequest): boolean {
-  const origin = req.headers.get("origin");
-  const referer = req.headers.get("referer");
   const host = req.headers.get("host");
 
   if (!host) return false;
 
   const expectedOrigin = `https://${host}`;
 
-  if (origin && origin === expectedOrigin) return true;
-  if (referer && referer.startsWith(expectedOrigin)) return true;
-
-  return false;
+  return (
+    originOf(req.headers.get("origin")) === expectedOrigin ||
+    originOf(req.headers.get("referer")) === expectedOrigin
+  );
 }
 
 export async function POST(req: NextRequest) {
