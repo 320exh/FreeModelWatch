@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import crypto from "node:crypto";
 import { getFreeModels, getModelView, getVerificationHistory, getAllModels, getAllProviders } from "@/lib/queries";
 import { getDb } from "@/lib/db";
 
@@ -15,7 +16,6 @@ vi.mock("next/headers", () => ({
 function setupTestAuth() {
   process.env.ADMIN_USERNAME = "admin";
   const salt = "0123456789abcdef0123456789abcdef";
-  const crypto = require("node:crypto");
   const derivedKey = crypto.scryptSync("test-password", salt, 64);
   process.env.ADMIN_PASSWORD_HASH = `${salt}:${derivedKey.toString("hex")}`;
 }

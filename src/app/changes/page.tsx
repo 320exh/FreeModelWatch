@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getChanges, getModel, getProvider } from "@/lib/queries";
 import { getCategorizedChanges, CHANGE_CATEGORY_META } from "@/lib/intelligence";
 import { daysAgo } from "@/lib/format";
@@ -55,20 +56,20 @@ export default async function ChangesPage({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <a href="/changes" className={`card px-3 py-2 flex items-center gap-2 ${!catFilter ? "ring-1 ring-[var(--accent)]" : ""}`}>
+        <Link href="/changes" className={`card px-3 py-2 flex items-center gap-2 ${!catFilter ? "ring-1 ring-[var(--accent)]" : ""}`}>
           <span className="text-[13px]">All</span>
           <span className="text-[var(--fg-dim)] text-[12px]">{categorized.length}</span>
-        </a>
+        </Link>
         {categories.map((key) => {
           const meta = CHANGE_CATEGORY_META[key];
           const n = counts[key] ?? 0;
           const active = catFilter === key;
           return (
-            <a key={key} href={`/changes?cat=${key}`} className={`card px-3 py-2 flex items-center gap-2 ${active ? "ring-1 ring-[var(--accent)]" : ""}`} style={{ borderColor: meta.color }}>
+            <Link key={key} href={`/changes?cat=${key}`} className={`card px-3 py-2 flex items-center gap-2 ${active ? "ring-1 ring-[var(--accent)]" : ""}`} style={{ borderColor: meta.color }}>
               <span>{meta.icon}</span>
               <span className="text-[13px]">{meta.label}</span>
               <span className="text-[var(--fg-dim)] text-[12px]">{n}</span>
-            </a>
+            </Link>
           );
         })}
       </div>
@@ -91,9 +92,9 @@ export default async function ChangesPage({
                     <span className="font-semibold" style={{ color }}>{meta?.icon} {meta?.label ?? c.category}</span>
                     <span className="font-medium">{entityName(c.entityId)}</span>
                     {c.scope !== "global" && c.providerId && (
-                      <a href={`/providers/${c.providerId}`} className="chip" style={{ color: "#60a5fa", borderColor: "#1d4e57", background: "#08222a" }}>
+                      <Link href={`/providers/${c.providerId}`} className="chip" style={{ color: "#60a5fa", borderColor: "#1d4e57", background: "#08222a" }}>
                         {getProvider(c.providerId)?.name ?? c.providerId}
-                      </a>
+                      </Link>
                     )}
                     {c.verifiedAt ? (
                       <span className="chip" style={{ color: "#34d399", borderColor: "#1f5e47", background: "#0e1f18" }}>VERIFIED</span>

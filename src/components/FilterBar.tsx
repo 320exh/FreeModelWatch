@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import type { AccessType, Provider, Harness, DataOrigin, CollectionMode } from "@/lib/types";
 import { ACCESS_LABELS } from "@/lib/format";
 
@@ -67,9 +67,14 @@ export function FilterBar({ providers, harnesses }: { providers: Provider[]; har
   const sp = useSearchParams();
   const [q, setQ] = useState(sp.get("q") ?? "");
 
-  useEffect(() => {
+  // Re-sync the query input whenever the URL search params object changes
+  // (filter toggles, back/forward navigation). Adjusting state during render
+  // is React's documented replacement for calling setState inside an effect.
+  const [prevSp, setPrevSp] = useState(sp);
+  if (prevSp !== sp) {
+    setPrevSp(sp);
     setQ(sp.get("q") ?? "");
-  }, [sp]);
+  }
 
   function current(): URLSearchParams {
     return new URLSearchParams(Array.from(sp.entries()));

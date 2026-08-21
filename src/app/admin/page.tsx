@@ -219,7 +219,7 @@ export default async function AdminPage({
         <h2 className="text-lg font-semibold">Live Collectors <span className="text-[var(--fg-mute)] text-[12px]">(administrative)</span></h2>
         <div className="card p-3 text-[12.5px] text-[#34d399] border" style={{ borderColor: "#1e5a2e", background: "#0c1f12" }}>
           <strong>Administrative operation.</strong> Runs the OpenRouter/Gemini live collectors, which write rows with{" "}
-          <code className="mono">data_origin = 'live_collector'</code> (auto, confidence <em>likely</em> — not human-verified).
+          <code className="mono">data_origin = &apos;live_collector&apos;</code> (auto, confidence <em>likely</em> — not human-verified).
           Protected by HTTP Basic Auth — requires valid admin credentials. CLI execution bypasses HTTP auth.
         </div>
 

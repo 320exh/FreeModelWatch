@@ -87,7 +87,7 @@ export default function CollectorRunner() {
 
       <div className="text-[12px] text-[#fbbf24] border rounded p-2" style={{ borderColor: "#5e4d18", background: "#1f1a08" }}>
         <strong>Live-data banner:</strong> Rows written by a collector are stamped{" "}
-        <code className="mono">data_origin = 'live_collector'</code> with confidence <em>likely</em> (auto, not human-verified).
+        <code className="mono">data_origin = &apos;live_collector&apos;</code> with confidence <em>likely</em> (auto, not human-verified).
         They appear as live data but should be manually verified before being treated as authoritative.
       </div>
     </div>

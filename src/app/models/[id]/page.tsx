@@ -327,7 +327,7 @@ export default async function ModelPage({ params }: { params: Promise<{ id: stri
         {(() => {
           const hist = m.routes.flatMap((r) => getVerificationHistory(r.availability.id));
           if (hist.length === 0) {
-            return <div className="card p-5 text-[13px] text-[var(--fg-dim)]">No verification events recorded yet for this model's routes.</div>;
+            return <div className="card p-5 text-[13px] text-[var(--fg-dim)]">No verification events recorded yet for this model&apos;s routes.</div>;
           }
           return (
             <div className="card divide-y divide-[var(--border)]">

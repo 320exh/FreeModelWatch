@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
+import crypto from "node:crypto";
 
 const originalEnv = { ...process.env };
 
 function setupTestAuth() {
   process.env.ADMIN_USERNAME = "admin";
   const salt = "0123456789abcdef0123456789abcdef";
-  const crypto = require("node:crypto");
   const derivedKey = crypto.scryptSync("test-password", salt, 64);
   process.env.ADMIN_PASSWORD_HASH = `${salt}:${derivedKey.toString("hex")}`;
 }

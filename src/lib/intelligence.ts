@@ -278,7 +278,7 @@ export function scoreRouteQuality(
   sources: Source[]
 ): RouteQualityScore {
   const unknownFlags: string[] = [];
-  let freeCostQuality = QUALITY_ACCESS[a.accessType] ?? 8;
+  const freeCostQuality = QUALITY_ACCESS[a.accessType] ?? 8;
 
   // Quota quality. Unknown quota => low (NOT unlimited).
   let quotaQuality = 4;
@@ -315,7 +315,7 @@ export function scoreRouteQuality(
     expired: 0,
     unavailable: 0,
   };
-  let freshness = freshRank[fresh] ?? 0;
+  const freshness = freshRank[fresh] ?? 0;
   if (fresh === "stale" || fresh === "seed_demo" || fresh === "unverified") unknownFlags.push("freshness_weak");
 
   const srcRel = sources.length === 0 && !a.sourceUrl ? "unverified" : bestSourceReliability(sources);
