@@ -124,6 +124,11 @@ describe("DbCollectorSink provenance preservation (Decision 3, §14c)", () => {
     sink.markRemoved("liverem__google");
     expect(getRow("liverem__google").data_origin).toBe("live_collector");
   });
+
+  it("stores a collector-asserted 'verified' confidence on first import", () => {
+    sink.upsertAvailabilityRow(baseAvail({ id: "v__google", modelId: "v", confidence: "verified" }), "src-x");
+    expect(getRow("v__google").verification_confidence).toBe("verified");
+  });
 });
 
 describe("DbCollectorSink route-cache invalidation (write path)", () => {

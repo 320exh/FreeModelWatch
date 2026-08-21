@@ -374,7 +374,7 @@ export class DbCollectorSink implements CollectorSink {
         a.rateLimitRpm ?? null, a.rateLimitTpm ?? null, a.dailyLimit ?? null, a.monthlyLimit ?? null,
         a.inputPricePerMillion, a.outputPricePerMillion, "USD", bool(a.requiresApiKey), bool(a.requiresPaymentMethod),
         bool(a.paymentRequirementKnown ?? false), bool(a.requiresSignup), null, a.apiFormat, null, a.status, 1, a.sourceUrl, a.sourceTitle, "official_docs",
-        this.today, "collector", "likely", a.free.reason ?? "Imported by live collector.", effDataOrigin, effCollectionMode, a.expiresAt, null,
+        this.today, "collector", effConfidence, a.free.reason ?? "Imported by live collector.", effDataOrigin, effCollectionMode, a.expiresAt, null,
       ];
       db.prepare(`INSERT INTO availability (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`).run(...params);
       this.recordChange({
