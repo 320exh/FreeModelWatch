@@ -259,6 +259,20 @@ describe("Gemini runGeminiCollector", () => {
     expect(runs.status).toBe("failed");
   });
 
+  it("timeout (aborted fetch) is recorded as failed and writes nothing", async () => {
+    // The mock fetch never settles on its own; only the collector's hard
+    // timeout firing controller.abort() can reject it. This proves the
+    // timeout wiring reaches the Gemini call site and that a hung provider
+    // connection fails safely instead of hanging or writing partial data.
+    const before = getDb().prepare("SELECT COUNT(*) AS c FROM availability WHERE provider_id = ?").get(GEMINI_PROVIDER_ID) as { c: number };
+    const report = await runGeminiCollector({ apiKey: "k", fetchImpl: abortingFetch(), timeoutMs: 30, maxRetries: 0 });
+    expect(report.status).toBe("failed");
+    const after = getDb().prepare("SELECT COUNT(*) AS c FROM availability WHERE provider_id = ?").get(GEMINI_PROVIDER_ID) as { c: number };
+    expect(after.c).toBe(before.c);
+    const runs = getDb().prepare("SELECT status FROM collector_runs WHERE collector = ? ORDER BY started_at DESC LIMIT 1").get(GEMINI_PROVIDER_ID) as { status: string };
+    expect(runs.status).toBe("failed");
+  });
+
   it("refuses a suspiciously small catalog (partial response guard)", async () => {
     // Seed a prior large successful run so the guard arms.
     getDb()
