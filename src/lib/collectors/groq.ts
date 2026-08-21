@@ -358,10 +358,63 @@ export interface GroqCollectorOptions {
   fetchImpl?: typeof fetch;
 }
 
+// Named character references that may appear inside Groq rate-limit table
+// cells. Unknown names are left as literal text (browsers render unrecognized
+// entities verbatim inside cells, so text extraction must do the same).
+const CELL_NAMED_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+};
+
+/**
+ * Resolve HTML character references (numeric + a small named-entity allowlist)
+ * to their characters. This is a normalization pass, NOT sanitization: encoded
+ * markup such as `&lt;img ...&gt;` becomes literal markup here so that the
+ * markup removal below treats it exactly like source-level tags instead of
+ * letting angle brackets smuggle through as "text".
+ */
+function decodeCellEntities(s: string): string {
+  return s.replace(
+    /&(?:#x([0-9a-f]+)|#([0-9]+)|([a-z][a-z0-9]*));/gi,
+    (whole: string, hex?: string, dec?: string, name?: string): string => {
+      if (hex != null || dec != null) {
+        const code = hex != null ? Number.parseInt(hex, 16) : Number.parseInt(dec as string, 10);
+        // Drop malformed / out-of-range / surrogate numeric references rather
+        // than emitting raw entity syntax (mirrors browser recovery).
+        if (!Number.isFinite(code) || code < 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff)) {
+          return "";
+        }
+        return String.fromCodePoint(code);
+      }
+      const mapped = CELL_NAMED_ENTITIES[(name as string).toLowerCase()];
+      return mapped ?? whole;
+    },
+  );
+}
+
+/**
+ * Extract human-visible text from an HTML table cell.
+ *
+ * Security postcondition: the returned string never contains '<' or '>'.
+ * The guarantee is enforced structurally, not by stripping tag-shaped
+ * sequences (patterns like /<[^>]+>/ are evadable — e.g. "<<img src=x>"
+ * leaves a live '<' behind after removal):
+ *   1. decode character references FIRST (see decodeCellEntities);
+ *   2. discard every '<...' region, including unterminated tails (a browser
+ *      consumes an unterminated tag open to EOF, dropping it from the text);
+ *   3. finally remove any residual '<'/'>' one character at a time —
+ *      single-character matching cannot be defeated by overlapping or nested
+ *      input, so the postcondition holds regardless of crafted content.
+ */
 function cellText(s: string): string {
-  return s
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/gi, " ")
+  const decoded = decodeCellEntities(s);
+  const withoutMarkup = decoded.split(/<[^>]*>?/).join("");
+  return withoutMarkup
+    .replace(/[<>]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
