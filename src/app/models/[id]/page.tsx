@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getModelView, getAllProviders, getProvider, getVerificationHistory, getCrossProviderRoutes } from "@/lib/queries";
+import { getModelView, getAllProviders, getProvider, getVerificationHistory, getCrossProviderRoutes, freeRoutePriceLabel } from "@/lib/queries";
 import { buildFreeAccessRoutes } from "@/lib/intelligence";
 import { AccessBadge, ConfidenceBadge, FreshnessBadge, OpenBadge, StatusPill, CategoryBadge } from "@/components/ui";
 import { formatQuota, daysAgo, STATUS_ICONS, ACCESS_WHY, PAYMENT_LABELS, FRESHNESS_EMOJI_LABEL } from "@/lib/format";
@@ -225,7 +225,7 @@ export default async function ModelPage({ params }: { params: Promise<{ id: stri
                     </td>
                     <td className="p-3"><AccessBadge type={r.accessType} short /></td>
                     <td className="p-3 mono text-[var(--fg)]">
-                      {r.isFree ? (r.inputPricePerMillion === 0 && r.outputPricePerMillion === 0 ? "Free $0" : `$${r.inputPricePerMillion}/M in`) : "Paid"}
+                      {freeRoutePriceLabel(r.accessType, r.inputPricePerMillion, r.outputPricePerMillion)}
                     </td>
                     <td className="p-3 mono text-[var(--fg)]">{e?.freeQuotaText ?? "—"}</td>
                     <td className="p-3 mono text-[var(--fg)]">

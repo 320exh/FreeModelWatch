@@ -341,6 +341,51 @@ export function isFreeAccess(a: Availability): boolean {
   return a.isActive && FREE_STATUSES.includes(a.status);
 }
 
+/**
+ * Canonical free-access classification, shared by the cross-provider table,
+ * pricing helpers, and the verification queue so the "is this route free?"
+ * decision has a single source of truth.
+ */
+export function isRouteFree(
+  accessType: AccessType,
+  inputPricePerMillion: number | null,
+  outputPricePerMillion: number | null,
+): boolean {
+  return (
+    accessType === "free_local" ||
+    accessType === "completely_free" ||
+    (inputPricePerMillion === 0 && outputPricePerMillion === 0) ||
+    [
+      "free_tier",
+      "free_credits",
+      "free_with_limits",
+      "free_through_aggregator",
+      "free_through_harness",
+      "temporarily_free",
+    ].includes(accessType)
+  );
+}
+
+/**
+ * Renders the "Free pricing" cell for a route. Reuses the canonical isRouteFree
+ * classification so genuinely free routes (free_local, completely_free, zero
+ * price, or other free access types) can never render as "Paid" or "$null/M".
+ * Free routes still surface a real per-token price when one is known.
+ */
+export function freeRoutePriceLabel(
+  accessType: AccessType,
+  inputPricePerMillion: number | null,
+  outputPricePerMillion: number | null,
+): string {
+  if (isRouteFree(accessType, inputPricePerMillion, outputPricePerMillion)) {
+    if (inputPricePerMillion != null || outputPricePerMillion != null) {
+      return `$${inputPricePerMillion ?? 0}/M in`;
+    }
+    return "Free $0";
+  }
+  return "Paid";
+}
+
 // ---------------------------------------------------------------------------
 // Enriched model view (model + its free routes) — loads the whole graph once
 // to avoid N+1 queries as the dataset grows.
@@ -551,7 +596,11 @@ export function getCrossProviderRoutes(modelId: string): CrossProviderRoute[] {
          JOIN providers p ON p.id = a.provider_id
          WHERE (CASE WHEN instr(substr(m.id, instr(m.id,'__')+2),'/')>0 THEN substr(m.id, instr(m.id,'__')+2+instr(substr(m.id, instr(m.id,'__')+2),'/')) ELSE CASE WHEN instr(m.id,'__')>0 THEN substr(m.id, instr(m.id,'__')+2) ELSE m.id END END) = ?
           AND a.is_active = 1
-        ORDER BY (CASE WHEN (a.input_price_per_million = 0 AND a.output_price_per_million = 0) OR a.access_type = 'completely_free' THEN 0 ELSE 1 END), p.name`
+         ORDER BY (CASE WHEN a.access_type = 'free_local'
+             OR a.access_type = 'completely_free'
+             OR (a.input_price_per_million = 0 AND a.output_price_per_million = 0)
+             OR a.access_type IN ('free_tier','free_credits','free_with_limits','free_through_aggregator','free_through_harness','temporarily_free')
+            THEN 0 ELSE 1 END), p.name`
     )
     .all(key) as any[];
   return rows.map((r: any) => ({
@@ -563,7 +612,7 @@ export function getCrossProviderRoutes(modelId: string): CrossProviderRoute[] {
     providerCategory: r.provider_category,
     accessType: r.access_type as AccessType,
     status: r.status,
-    isFree: (r.input_price_per_million === 0 && r.output_price_per_million === 0) || r.access_type === "completely_free",
+    isFree: isRouteFree(r.access_type as AccessType, r.input_price_per_million, r.output_price_per_million),
     inputPricePerMillion: r.input_price_per_million,
     outputPricePerMillion: r.output_price_per_million,
     rateLimitRpm: r.rate_limit_rpm,

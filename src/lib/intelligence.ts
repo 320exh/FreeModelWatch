@@ -6,6 +6,7 @@ import {
   getHarnessCompat,
   getLastCollectorRuns,
   detectContradictions,
+  isRouteFree,
   type Graph,
   type ModelView,
 } from "./queries";
@@ -222,12 +223,7 @@ function bestSourceReliability(sources: Source[]): VerificationConfidence {
 }
 
 function freePricingText(a: Availability): string {
-  const free =
-    a.accessType === "free_local" ||
-    a.accessType === "completely_free" ||
-    (a.inputPricePerMillion === 0 && a.outputPricePerMillion === 0) ||
-    ["free_tier", "free_credits", "free_with_limits", "free_through_aggregator", "free_through_harness", "temporarily_free"].includes(a.accessType);
-  return free ? "Free ($0)" : "Paid";
+  return isRouteFree(a.accessType, a.inputPricePerMillion, a.outputPricePerMillion) ? "Free ($0)" : "Paid";
 }
 
 function freeQuotaText(a: Availability): string {
