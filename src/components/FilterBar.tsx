@@ -45,9 +45,9 @@ const ORIGINS: { key: DataOrigin; label: string }[] = [
   { key: "user_report", label: "User report" },
 ];
 
-const COLLECTION_MODES: { key: CollectionMode; label: string }[] = [
+const COLLECTION_MODES: { key: CollectionMode; label: string; tooltip?: string }[] = [
   { key: "live", label: "Live" },
-  { key: "frozen", label: "Frozen fallback" },
+  { key: "frozen", label: "Frozen fallback", tooltip: "Collector fallback data (frozen snapshot used when live collection fails or no API key is available). Not live-verified." },
   { key: "seed", label: "Demo / Seed" },
 ];
 
@@ -219,6 +219,7 @@ export function FilterBar({ providers, harnesses }: { providers: Provider[]; har
             key={c.key}
             active={hasCSV("collection_mode", c.key)}
             onClick={() => toggleCSV("collection_mode", c.key)}
+            title={c.tooltip}
           >
             {c.label}
           </Toggle>
@@ -278,7 +279,7 @@ function FilterRow({ label, children }: { label: string; children: React.ReactNo
   );
 }
 
-function Toggle({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function Toggle({ active, onClick, children, title }: { active: boolean; onClick: () => void; children: React.ReactNode; title?: string }) {
   return (
     <button
       onClick={onClick}
@@ -288,6 +289,7 @@ function Toggle({ active, onClick, children }: { active: boolean; onClick: () =>
           ? { color: "#06101f", background: "var(--accent)", borderColor: "var(--accent)" }
           : { color: "#9aa1b0", borderColor: "#2f3340", background: "#111319" }
       }
+      title={title}
     >
       {children}
     </button>

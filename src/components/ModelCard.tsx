@@ -1,11 +1,28 @@
 import Link from "next/link";
 import type { ModelView } from "@/lib/queries";
 import { AccessBadge, ConfidenceBadge, FreshnessBadge, OpenBadge, StatusPill } from "./ui";
-import { formatNumber, daysAgo } from "@/lib/format";
+import { formatNumber, daysAgo, COLLECTION_MODE_LABELS } from "@/lib/format";
 
 export function ModelCard({ m }: { m: ModelView }) {
   const accessTypes = Array.from(new Set(m.routes.map((r) => r.availability.accessType)));
   const best = m.routes[0];
+  const hasFrozen = m.routes.some((r) => r.availability.collectionMode === "frozen");
+  const hasSeed = m.routes.some((r) => r.availability.collectionMode === "seed");
+  const hasLive = m.routes.some((r) => r.availability.collectionMode === "live");
+  
+  function collectionModeLabel(): string {
+    if (hasLive) return COLLECTION_MODE_LABELS.live;
+    if (hasFrozen) return COLLECTION_MODE_LABELS.frozen;
+    return COLLECTION_MODE_LABELS.seed;
+  }
+  
+  function qualityText(): string {
+    if (hasLive && (hasFrozen || hasSeed)) return "Mixed: live and non-live data";
+    if (hasFrozen) return "Frozen collector fallback — not currently live-verified.";
+    if (hasSeed) return "Based on demo/seed data — not live-verified.";
+    return "";
+  }
+  
   return (
     <Link href={`/models/${m.id}`} className="card card-hover p-4 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
@@ -54,13 +71,9 @@ export function ModelCard({ m }: { m: ModelView }) {
           <ConfidenceBadge conf={m.bestConfidence} />
         </div>
       </div>
-      {m.dataQuality !== "live" && (
+      {(hasFrozen || hasSeed) && (
         <div className="text-[11px] text-[var(--fg-mute)]">
-          {m.dataQuality === "seed"
-            ? "Based on demo/seed data — not live-verified."
-            : m.dataQuality === "stale"
-            ? "Ranked on stale/expired data — verify before relying."
-            : "Mixed data quality — partly seed/stale."}
+          {qualityText()}
         </div>
       )}
     </Link>

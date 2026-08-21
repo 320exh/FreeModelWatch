@@ -1,4 +1,4 @@
-import type { AccessType, AvailabilityStatus, ProviderCategory, VerificationConfidence, FreshnessTier, DataOrigin } from "./types";
+import type { AccessType, AvailabilityStatus, ProviderCategory, VerificationConfidence, FreshnessTier, DataOrigin, CollectionMode } from "./types";
 
 export const ACCESS_LABELS: Record<AccessType, string> = {
   completely_free: "Completely Free",
@@ -93,6 +93,24 @@ export const DATA_ORIGIN_LABELS: Record<DataOrigin, string> = {
   production: "Verified production",
   user_report: "User report",
   live_collector: "Live collector",
+};
+
+export const COLLECTION_MODE_LABELS: Record<CollectionMode, string> = {
+  live: "Live",
+  frozen: "Frozen fallback",
+  seed: "Demo / Seed",
+};
+
+export const COLLECTION_MODE_EMOJI: Record<CollectionMode, string> = {
+  live: "🟢",
+  frozen: "❄️",
+  seed: "⚪",
+};
+
+export const COLLECTION_MODE_COLORS: Record<CollectionMode, { color: string; bg: string; border: string }> = {
+  live: { color: "#34d399", bg: "#0e1f18", border: "#1f5e47" },
+  frozen: { color: "#60a5fa", bg: "#0d1929", border: "#274a73" },
+  seed: { color: "#d9c27a", bg: "#1a1407", border: "#5e4d18" },
 };
 
 export const STATUS_LABELS: Record<AvailabilityStatus, string> = {

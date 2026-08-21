@@ -1092,10 +1092,15 @@ export function getDashboardStats(): DashboardStats {
 
   const queue = getVerificationQueue();
   const issues = detectContradictions();
-  const seedCount = getAvailability({ activeOnly: true }).filter((a) => a.dataOrigin === "seed").length;
+  
+  const activeAvail = getAvailability({ activeOnly: true });
+  const liveCount = activeAvail.filter((a) => a.collectionMode === "live").length;
+  const frozenCount = activeAvail.filter((a) => a.collectionMode === "frozen").length;
+  const seedCount = activeAvail.filter((a) => a.collectionMode === "seed").length;
 
   const alerts: DashboardStats["alerts"] = [];
-  if (seedCount > 0) alerts.push({ level: "seed", text: `${seedCount} free routes are demo/seed data — verify against live sources before relying.`, href: "/admin" });
+  if (frozenCount > 0) alerts.push({ level: "seed", text: `${frozenCount} free routes are frozen collector fallback — not live-verified.`, href: "/admin" });
+  if (seedCount > 0) alerts.push({ level: "seed", text: `${seedCount} free routes are curated demo/seed data — not live-verified.`, href: "/admin" });
   if (newlyFree.length) alerts.push({ level: "new", text: `${newlyFree.length} model(s) became free recently.`, href: "/changes" });
   if (recentlyRemoved.length) alerts.push({ level: "down", text: `${recentlyRemoved.length} model(s) lost free access recently.`, href: "/changes" });
   const staleCount = getStaleCount();
