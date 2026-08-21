@@ -1,4 +1,4 @@
-import { getDb, resetDb } from "./db";
+import { getDb } from "./db";
 import { PROVIDERS, HARNESSES } from "./seed-data";
 import { AVAILABILITY, SOURCES, HARNESS_COMPAT, CHANGES } from "./seed-availability";
 import { MODELS } from "./seed-data";
@@ -22,7 +22,6 @@ function reliabilityForSource(s: Source): string {
 
 export function seedDatabase(): void {
   const db = getDb();
-  resetDb();
 
   const insertProvider = db.prepare(`
     INSERT OR IGNORE INTO providers
