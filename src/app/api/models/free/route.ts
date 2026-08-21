@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { queryModels, getAllProviders, getAllHarnesses, type ModelFilters, type ModelView } from "@/lib/queries";
 import { serializeModelView } from "@/lib/api";
-import type { AccessType, VerificationConfidence, FreshnessTier, DataOrigin } from "@/lib/types";
+import type { AccessType, VerificationConfidence, FreshnessTier, DataOrigin, CollectionMode } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +12,7 @@ const KNOWN_ACCESS: AccessType[] = [
 ];
 const KNOWN_ORIGIN: DataOrigin[] = ["seed", "production", "user_report", "live_collector"];
 const KNOWN_CONF: VerificationConfidence[] = ["verified", "likely", "unverified", "stale"];
+const KNOWN_COLLECTION_MODE: CollectionMode[] = ["live", "frozen", "seed"];
 
 // Convenience aliases (req 17) so callers can use short/intuitive tokens.
 const ACCESS_ALIASES: Record<string, AccessType> = {
@@ -72,6 +73,7 @@ export function GET(req: Request) {
       access: expandAccessAliases(p.get("access")),
       verified: csv<VerificationConfidence>(p.get("verified"), KNOWN_CONF),
       origin: csv<DataOrigin>(p.get("origin"), KNOWN_ORIGIN),
+      collection_mode: csv<CollectionMode>(p.get("collection_mode"), KNOWN_COLLECTION_MODE),
       coding: boolParam(p.get("coding")) ?? false,
       reasoning: boolParam(p.get("reasoning")) ?? false,
       vision: boolParam(p.get("vision")) ?? false,
@@ -106,7 +108,7 @@ export function GET(req: Request) {
       offset,
       filters: activeFilters,
       freshness: freshnessBuckets,
-      note: "Routes with dataOrigin 'seed' are demo data and are NOT live-verified. Check the `freshness` field per route.",
+      note: "Routes are classified by collection_mode: 'live' (live collector), 'frozen' (collector fallback), or 'seed' (curated demo data). Routes with collection_mode 'seed' or 'frozen' are NOT live-verified. Check the `freshness` and `collection_mode` fields per route.",
       models: page.map(serializeModelView),
     });
   } catch (err) {

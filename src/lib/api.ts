@@ -1,5 +1,5 @@
 import type { ModelView, ScoredModel } from "./queries";
-import type { Model, Availability, Provider, HarnessCompat, ChangeHistory, Source, VerificationConfidence, FreshnessTier } from "./types";
+import type { Model, Availability, Provider, HarnessCompat, ChangeHistory, Source, VerificationConfidence, FreshnessTier, CollectionMode } from "./types";
 
 export function serializeModelView(m: ModelView) {
   return {
@@ -28,6 +28,7 @@ export function serializeModelView(m: ModelView) {
     bestStatus: m.bestStatus,
     bestConfidence: m.bestConfidence,
     bestFreshness: m.bestFreshness,
+    bestCollectionMode: m.bestCollectionMode,
     dataQuality: m.dataQuality,
     noPaymentMethod: m.noPaymentMethod,
     noCreditCard: m.noCreditCard,
@@ -55,6 +56,7 @@ export function serializeModelView(m: ModelView) {
       lastVerifiedAt: r.availability.lastVerifiedAt,
       verificationConfidence: r.availability.verificationConfidence,
       dataOrigin: r.availability.dataOrigin,
+      collectionMode: r.availability.collectionMode,
       expiresAt: r.availability.expiresAt ?? null,
       sourceUrl: r.availability.sourceUrl,
       sources: r.sources.map(serializeSource),
