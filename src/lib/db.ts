@@ -269,10 +269,11 @@ function createConnection(): any {
   db.exec("UPDATE availability SET data_origin = 'seed' WHERE data_origin IS NULL OR data_origin = ''");
   db.exec("UPDATE providers SET data_origin = 'seed' WHERE data_origin IS NULL OR data_origin = ''");
   db.exec("UPDATE model_harness_compatibility SET data_origin = 'seed' WHERE data_origin IS NULL OR data_origin = ''");
-  // Backfill collection_mode: seed rows, then frozen fallback (groq/gemini with 'likely' confidence),
-  // remaining live_collector rows default to 'live' via CHECK constraint default.
-  db.exec(`UPDATE availability SET collection_mode = 'seed' WHERE data_origin = 'seed'`);
-  db.exec(`UPDATE availability SET collection_mode = 'frozen' WHERE data_origin = 'live_collector' AND provider_id IN ('groq','gemini') AND verification_confidence = 'likely' AND collection_mode IS NULL`);
+  // Backfill collection_mode: 
+  // - Seed rows that don't have a mode yet get 'seed' (frozen rows already have 'frozen' from seed insert)
+  db.exec(`UPDATE availability SET collection_mode = 'seed' WHERE data_origin = 'seed' AND collection_mode IS NULL`);
+  // - Live collector rows that don't have a mode yet get 'live'
+  db.exec(`UPDATE availability SET collection_mode = 'live' WHERE data_origin = 'live_collector' AND collection_mode IS NULL`);
   // Remaining NULL collection_mode rows get 'live' via CHECK constraint default.
   return db;
 }
