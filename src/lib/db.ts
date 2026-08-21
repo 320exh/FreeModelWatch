@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS availability (
   verification_confidence TEXT DEFAULT 'unverified',
   verification_notes TEXT,
   data_origin TEXT DEFAULT 'seed',
+  collection_mode TEXT DEFAULT 'live' CHECK (collection_mode IN ('live','frozen','seed')),
   expires_at TEXT,
   verified_by TEXT
 );
@@ -232,6 +233,7 @@ const MIGRATIONS: { table: string; column: string; ddl: string }[] = [
   { table: "availability", column: "expires_at", ddl: "ALTER TABLE availability ADD COLUMN expires_at TEXT" },
   { table: "availability", column: "verified_by", ddl: "ALTER TABLE availability ADD COLUMN verified_by TEXT" },
   { table: "availability", column: "payment_requirement_known", ddl: "ALTER TABLE availability ADD COLUMN payment_requirement_known INTEGER DEFAULT 0" },
+  { table: "availability", column: "collection_mode", ddl: "ALTER TABLE availability ADD COLUMN collection_mode TEXT DEFAULT 'live' CHECK (collection_mode IN ('live','frozen','seed'))" },
   { table: "providers", column: "data_origin", ddl: "ALTER TABLE providers ADD COLUMN data_origin TEXT DEFAULT 'seed'" },
   { table: "sources", column: "reliability", ddl: "ALTER TABLE sources ADD COLUMN reliability TEXT DEFAULT 'unknown'" },
   { table: "sources", column: "last_checked_at", ddl: "ALTER TABLE sources ADD COLUMN last_checked_at TEXT" },
@@ -267,6 +269,11 @@ function createConnection(): any {
   db.exec("UPDATE availability SET data_origin = 'seed' WHERE data_origin IS NULL OR data_origin = ''");
   db.exec("UPDATE providers SET data_origin = 'seed' WHERE data_origin IS NULL OR data_origin = ''");
   db.exec("UPDATE model_harness_compatibility SET data_origin = 'seed' WHERE data_origin IS NULL OR data_origin = ''");
+  // Backfill collection_mode: seed rows, then frozen fallback (groq/gemini with 'likely' confidence),
+  // remaining live_collector rows default to 'live' via CHECK constraint default.
+  db.exec(`UPDATE availability SET collection_mode = 'seed' WHERE data_origin = 'seed'`);
+  db.exec(`UPDATE availability SET collection_mode = 'frozen' WHERE data_origin = 'live_collector' AND provider_id IN ('groq','gemini') AND verification_confidence = 'likely' AND collection_mode IS NULL`);
+  // Remaining NULL collection_mode rows get 'live' via CHECK constraint default.
   return db;
 }
 

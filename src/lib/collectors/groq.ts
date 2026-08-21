@@ -1,4 +1,4 @@
-import type { AccessType, AvailabilityStatus, VerificationConfidence } from "../types";
+import type { AccessType, AvailabilityStatus, VerificationConfidence, CollectionMode } from "../types";
 import {
   type FreeClassification,
   type NormalizedModel,
@@ -303,6 +303,7 @@ export function normalizeGroqModel(raw: GroqModel, providerId: string = GROQ_PRO
       sourceType: "official_docs",
       sourceTitle: "Groq",
       apiFormat: "openai_chat_completions",
+      collectionMode: "frozen",
     };
   }
 
@@ -775,6 +776,7 @@ export class GroqCollector {
           sourceType: "official_docs",
           sourceTitle: "Groq",
           apiFormat: "openai_chat_completions",
+          collectionMode: "live",
         };
       }
 

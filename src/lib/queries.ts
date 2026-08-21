@@ -13,6 +13,7 @@ import type {
   VerificationConfidence,
   DataOrigin,
   FreshnessTier,
+  CollectionMode,
 } from "./types";
 
 export function ensureSeeded(): void {
@@ -116,11 +117,12 @@ function rowToAvailability(r: any): Availability {
     sourceType: r.source_type,
     lastVerifiedAt: r.last_verified_at,
     verificationMethod: r.verification_method,
-    verificationConfidence: r.verification_confidence,
-    verificationNotes: r.verification_notes,
-    dataOrigin: (r.data_origin ?? "seed") as DataOrigin,
-    expiresAt: r.expires_at ?? null,
-    verifiedBy: r.verified_by ?? null,
+verificationConfidence: r.verification_confidence,
+  verificationNotes: r.verification_notes,
+  dataOrigin: (r.data_origin ?? "seed") as DataOrigin,
+  collectionMode: (r.collection_mode ?? "live") as CollectionMode,
+  expiresAt: r.expires_at ?? null,
+  verifiedBy: r.verified_by ?? null,
   };
 }
 
@@ -358,6 +360,7 @@ export interface ModelView extends Model {
   bestStatus: AvailabilityStatus | null;
   bestConfidence: VerificationConfidence;
   bestFreshness: FreshnessTier;
+  bestCollectionMode: CollectionMode;
   noPaymentMethod: boolean;
   noCreditCard: boolean;
   lowFriction: boolean;
@@ -464,6 +467,7 @@ function enrichModel(m: Model, g: Graph): ModelView {
     bestStatus: best?.availability.status ?? null,
     bestConfidence: best?.availability.verificationConfidence ?? "unverified",
     bestFreshness: best?.freshness ?? "seed_demo",
+    bestCollectionMode: best?.availability.collectionMode ?? "seed",
     noPaymentMethod,
     noCreditCard,
     lowFriction,
@@ -595,6 +599,7 @@ export interface ModelFilters {
   minContext?: number;
   verified?: VerificationConfidence[];
   origin?: DataOrigin[];
+  collection_mode?: CollectionMode[];
   sort?: "live-first" | "relevance" | "context" | "coding" | "recent" | "freshness" | "reliability";
 }
 
@@ -624,6 +629,10 @@ export function queryModels(f: ModelFilters): ModelView[] {
   if (f.origin && f.origin.length) {
     const origins = f.origin;
     views = views.filter((m) => m.routes.some((r) => origins.includes(r.availability.dataOrigin as DataOrigin)));
+  }
+  if (f.collection_mode && f.collection_mode.length) {
+    const modes = f.collection_mode;
+    views = views.filter((m) => m.routes.some((r) => modes.includes(r.availability.collectionMode ?? "live")));
   }
   if (f.coding) views = views.filter((m) => (m.codingCapability ?? 0) >= 4);
   if (f.reasoning) views = views.filter((m) => m.reasoningSupport);
@@ -663,9 +672,10 @@ export function queryModels(f: ModelFilters): ModelView[] {
       break;
     case "live-first":
       views.sort((a, b) => {
-        const aLive = isLiveFreshness(a.bestFreshness) ? 1 : 0;
-        const bLive = isLiveFreshness(b.bestFreshness) ? 1 : 0;
-        if (aLive !== bLive) return bLive - aLive;
+        const modeRank: Record<CollectionMode, number> = { live: 3, frozen: 2, seed: 1 };
+        const aRank = modeRank[a.bestCollectionMode ?? "seed"];
+        const bRank = modeRank[b.bestCollectionMode ?? "seed"];
+        if (aRank !== bRank) return bRank - aRank;
         // Within each group, preserve relevance ranking: capability first, then context
         return (b.codingCapability ?? 0) - (a.codingCapability ?? 0) || (b.contextWindow ?? 0) - (a.contextWindow ?? 0);
       });

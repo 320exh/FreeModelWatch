@@ -1,4 +1,4 @@
-import type { AccessType, AvailabilityStatus, VerificationConfidence } from "../types";
+import type { AccessType, AvailabilityStatus, VerificationConfidence, CollectionMode } from "../types";
 import {
   fetchJsonWithRetry,
   CollectorHttpError,
@@ -196,7 +196,7 @@ function deriveModalities(raw: GeminiModel, id: string): {
 // Normalization
 // ---------------------------------------------------------------------------
 
-export function normalizeModel(raw: GeminiModel, providerId: string = GEMINI_PROVIDER_ID): NormalizedModel {
+export function normalizeModel(raw: GeminiModel, providerId: string = GEMINI_PROVIDER_ID, collectionMode: CollectionMode = "frozen"): NormalizedModel {
   const externalId = externalIdOf(raw.name);
   const modelId = externalId; // unprefixed — matches seed google model ids
   const availId = `${modelId}__${providerId}`;
@@ -287,6 +287,7 @@ export function normalizeModel(raw: GeminiModel, providerId: string = GEMINI_PRO
       sourceType: "official_docs",
       sourceTitle: "Google AI Studio / Gemini API",
       apiFormat: "gemini",
+      collectionMode,
     };
   }
 

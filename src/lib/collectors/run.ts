@@ -386,8 +386,9 @@ export async function runGeminiCollector(opts: RunOptions = {}): Promise<Collect
   };
 
   let rawModels: GeminiModel[];
+  let apiKey: string | undefined;
   try {
-    const apiKey = opts.apiKey ?? process.env.GEMINI_API_KEY;
+    apiKey = opts.apiKey ?? process.env.GEMINI_API_KEY;
     if (apiKey) {
       const fetchOpts: FetchOptions = {
         timeoutMs: opts.timeoutMs ?? 15_000,
@@ -471,6 +472,8 @@ export async function runGeminiCollector(opts: RunOptions = {}): Promise<Collect
     return report;
   }
 
+  const isFrozen = !apiKey;
+
   const normalized: NormalizedModel[] = [];
   for (const raw of rawModels) {
     try {
@@ -478,7 +481,7 @@ export async function runGeminiCollector(opts: RunOptions = {}): Promise<Collect
         report.warnings.push("Skipped catalog entry with no name.");
         continue;
       }
-      normalized.push(normalizeGeminiModel(raw));
+      normalized.push(normalizeGeminiModel(raw, GEMINI_PROVIDER_ID, isFrozen ? "frozen" : "live"));
     } catch (err) {
       report.errors.push(`Normalize failed for ${raw?.name ?? "?"}: ${err instanceof Error ? err.message : String(err)}`);
     }

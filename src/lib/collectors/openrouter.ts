@@ -1,4 +1,4 @@
-import type { AccessType, AvailabilityStatus, VerificationConfidence } from "../types";
+import type { AccessType, AvailabilityStatus, VerificationConfidence, CollectionMode } from "../types";
 
 // ---------------------------------------------------------------------------
 // Official OpenRouter API — single source of truth for this collector.
@@ -390,6 +390,7 @@ export interface NormalizedAvailabilityRow {
   sourceType: string | null;
   sourceTitle: string | null;
   apiFormat: string;
+  collectionMode: CollectionMode;
 }
 
 export interface NormalizedModel {
@@ -480,6 +481,7 @@ export function normalizeModel(raw: OpenRouterModel, providerId: string = OPENRO
       sourceType: "official_docs",
       sourceTitle: "OpenRouter",
       apiFormat: "openai_chat_completions",
+      collectionMode: "live",
     };
   }
 

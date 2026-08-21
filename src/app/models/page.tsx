@@ -4,7 +4,7 @@ import { getAllProviders, getAllHarnesses, queryModels } from "@/lib/queries";
 import { ModelCard } from "@/components/ModelCard";
 import { FilterBar } from "@/components/FilterBar";
 import type { ModelFilters } from "@/lib/queries";
-import type { AccessType, VerificationConfidence, DataOrigin } from "@/lib/types";
+import type { AccessType, VerificationConfidence, DataOrigin, CollectionMode } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +30,7 @@ export default async function ModelsPage({
     access: csv(sp.access) as AccessType[],
     verified: csv(sp.verified) as VerificationConfidence[],
     origin: csv(sp.origin) as DataOrigin[],
+    collection_mode: csv(sp.collection_mode) as CollectionMode[],
     coding: bool(sp.coding),
     reasoning: bool(sp.reasoning),
     vision: bool(sp.vision),

@@ -27,7 +27,7 @@ import {
   GROQ_SOURCE_RATELIMITS_URL,
 } from "./groq";
 import type { CollectorSink, NormalizedAvailability, CollectorResult } from "./types";
-import type { VerificationConfidence } from "../types";
+import type { VerificationConfidence, CollectionMode } from "../types";
 import { invalidateRouteCache } from "../intelligence";
 
 function j(v: unknown): string | null {
@@ -353,6 +353,10 @@ export class DbCollectorSink implements CollectorSink {
     const effConfidence: VerificationConfidence = existing
       ? (maxConfidence(existing.verification_confidence, a.confidence) as VerificationConfidence)
       : a.confidence;
+    // Collection mode: for new rows, use the collector's mode; for existing production rows, preserve mode.
+    const effCollectionMode = existing
+      ? (existing.collection_mode as CollectionMode | null) ?? (isProduction ? "live" : "live")
+      : a.collectionMode ?? "live";
 
     if (!existing) {
       const cols = [
@@ -360,14 +364,14 @@ export class DbCollectorSink implements CollectorSink {
         "rate_limit_rpm", "rate_limit_tpm", "daily_limit", "monthly_limit", "input_price_per_million", "output_price_per_million",
         "currency", "requires_api_key", "requires_payment_method", "payment_requirement_known", "requires_signup", "geographic_restrictions", "api_format",
         "custom_endpoint_url", "status", "is_active", "source_url", "source_title", "source_type", "last_verified_at",
-        "verification_method", "verification_confidence", "verification_notes", "data_origin", "expires_at", "verified_by",
+        "verification_method", "verification_confidence", "verification_notes", "data_origin", "collection_mode", "expires_at", "verified_by",
       ];
       const params = [
         a.id, a.modelId, a.providerId, null, a.accessType, null, null, null,
         a.rateLimitRpm ?? null, a.rateLimitTpm ?? null, a.dailyLimit ?? null, a.monthlyLimit ?? null,
         a.inputPricePerMillion, a.outputPricePerMillion, "USD", bool(a.requiresApiKey), bool(a.requiresPaymentMethod),
         bool(a.paymentRequirementKnown ?? false), bool(a.requiresSignup), null, a.apiFormat, null, a.status, 1, a.sourceUrl, a.sourceTitle, "official_docs",
-        this.today, "collector", "likely", a.free.reason ?? "Imported by live collector.", "live_collector", a.expiresAt, null,
+        this.today, "collector", "likely", a.free.reason ?? "Imported by live collector.", effDataOrigin, effCollectionMode, a.expiresAt, null,
       ];
       db.prepare(`INSERT INTO availability (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`).run(...params);
       this.recordChange({
@@ -433,13 +437,13 @@ export class DbCollectorSink implements CollectorSink {
         input_price_per_million=?, output_price_per_million=?, rate_limit_rpm=?, rate_limit_tpm=?, daily_limit=?, monthly_limit=?,
         source_url=?, source_title=?, source_type=?,
         expires_at=?, is_active=1, last_verified_at=?, verification_method=?,
-        data_origin=?, verification_notes=?
+        data_origin=?, collection_mode=?, verification_notes=?
        WHERE id=?`
     ).run(
       a.status, a.accessType, effConfidence, bool(a.requiresPaymentMethod), bool(a.paymentRequirementKnown ?? false), a.inputPricePerMillion,
       a.outputPricePerMillion, a.rateLimitRpm ?? null, a.rateLimitTpm ?? null, a.dailyLimit ?? null, a.monthlyLimit ?? null,
       a.sourceUrl, a.sourceTitle, a.sourceType, a.expiresAt ?? null, this.today, effMethod, effDataOrigin,
-      wantNotes, a.id
+      effCollectionMode, wantNotes, a.id
     );
     this.linkSource(a.id, sourceId);
 

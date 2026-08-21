@@ -31,6 +31,7 @@ function makeMockModel(overrides: Partial<ModelView> = {}): ModelView {
     bestStatus: null,
     bestConfidence: "unverified",
     bestFreshness: "seed_demo",
+    bestCollectionMode: "seed",
     noPaymentMethod: false,
     noCreditCard: false,
     lowFriction: false,

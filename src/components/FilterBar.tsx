@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
-import type { AccessType, Provider, Harness, DataOrigin } from "@/lib/types";
+import type { AccessType, Provider, Harness, DataOrigin, CollectionMode } from "@/lib/types";
 import { ACCESS_LABELS } from "@/lib/format";
 
 const ACCESS_TYPES: AccessType[] = [
@@ -43,6 +43,12 @@ const ORIGINS: { key: DataOrigin; label: string }[] = [
   { key: "production", label: "Verified production" },
   { key: "seed", label: "Demo / Seed" },
   { key: "user_report", label: "User report" },
+];
+
+const COLLECTION_MODES: { key: CollectionMode; label: string }[] = [
+  { key: "live", label: "Live" },
+  { key: "frozen", label: "Frozen fallback" },
+  { key: "seed", label: "Demo / Seed" },
 ];
 
 const SORTS = [
@@ -106,6 +112,7 @@ export function FilterBar({ providers, harnesses }: { providers: Provider[]; har
     REQS.filter((r) => hasBool(r.key)).length +
     VERIFIED.filter((v) => hasCSV("verified", v.key)).length +
     ORIGINS.filter((o) => hasCSV("origin", o.key)).length +
+    COLLECTION_MODES.filter((c) => hasCSV("collection_mode", c.key)).length +
     (sp.get("provider") ? 1 : 0) +
     (sp.get("harness") ? 1 : 0) +
     (sp.get("minctx") ? 1 : 0);
@@ -202,6 +209,18 @@ export function FilterBar({ providers, harnesses }: { providers: Provider[]; har
             onClick={() => toggleCSV("origin", o.key)}
           >
             {o.label}
+          </Toggle>
+        ))}
+      </FilterRow>
+
+      <FilterRow label="Collection Mode">
+        {COLLECTION_MODES.map((c) => (
+          <Toggle
+            key={c.key}
+            active={hasCSV("collection_mode", c.key)}
+            onClick={() => toggleCSV("collection_mode", c.key)}
+          >
+            {c.label}
           </Toggle>
         ))}
       </FilterRow>

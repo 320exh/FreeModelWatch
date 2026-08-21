@@ -29,6 +29,7 @@ type AvInput = {
   method?: string | null;
   notes?: string | null;
   dataOrigin?: Availability["dataOrigin"];
+  collectionMode?: Availability["collectionMode"];
   expiresAt?: string | null;
 };
 
@@ -72,6 +73,7 @@ function av(i: AvInput): Availability {
     verificationConfidence: i.confidence ?? "likely",
     verificationNotes: i.notes ?? null,
     dataOrigin: i.dataOrigin ?? "seed",
+    collectionMode: i.collectionMode ?? "seed",
     expiresAt: i.expiresAt ?? null,
   };
 }

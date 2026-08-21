@@ -39,6 +39,9 @@ export type PaymentRequirement = "required" | "not_required" | "unknown";
 // They are NOT human-verified unless a later admin verification sets them to `production`.
 export type DataOrigin = "seed" | "production" | "user_report" | "live_collector";
 
+// How the availability row was collected.
+export type CollectionMode = "live" | "frozen" | "seed";
+
 // Computed freshness tier shown in the UI. Never let seed data look "live verified".
 export type FreshnessTier =
   | "live_verified" // production origin, confidence verified, recently checked
@@ -153,6 +156,7 @@ export interface Availability {
   verificationConfidence: VerificationConfidence;
   verificationNotes: string | null;
   dataOrigin?: DataOrigin;
+  collectionMode?: CollectionMode;
   expiresAt?: string | null;
   verifiedBy?: string | null;
 }
