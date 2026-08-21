@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { getVerificationQueue, detectContradictions, type QueueSeverity } from "@/lib/queries";
+import { verifyBasicAuth, unauthorizedResponse } from "@/lib/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export function GET(req: Request) {
+export async function GET(req: Request) {
+  const username = await verifyBasicAuth(req.headers.get("authorization"));
+  if (!username) {
+    return unauthorizedResponse();
+  }
   try {
     const url = new URL(req.url);
     const p = url.searchParams;

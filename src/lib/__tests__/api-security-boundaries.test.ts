@@ -88,6 +88,25 @@ describe("API Route Security Boundaries", () => {
 
     vi.mock("@/lib/queries", () => ({
       getLastCollectorRuns: vi.fn().mockReturnValue([]),
+      getVerificationQueue: vi.fn().mockReturnValue([
+        {
+          availabilityId: "a1",
+          modelId: "m1",
+          providerId: "p1",
+          modelName: "Model One",
+          providerName: "Provider One",
+          accessType: "free_tier",
+          status: "available",
+          confidence: "likely",
+          freshness: "live_verified",
+          dataOrigin: "seed",
+          lastVerifiedAt: null,
+          ageDays: 9999,
+          reason: "Seed/demo data not yet verified against a live source.",
+          urgency: 1,
+        },
+      ]),
+      detectContradictions: vi.fn().mockReturnValue([]),
     }));
   });
 
@@ -267,6 +286,38 @@ describe("API Route Security Boundaries", () => {
       const req = createRequest({ method: "GET", auth: validAuthHeader });
       const res = await GET(req);
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe("GET /api/verification-queue", () => {
+    function queueRequest(overrides: { auth?: string } = {}): NextRequest {
+      const url = "https://example.com/api/verification-queue";
+      const headers = new Headers();
+      headers.set("host", "example.com");
+      if (overrides.auth) headers.set("authorization", overrides.auth);
+      return new NextRequest(url, { method: "GET", headers });
+    }
+
+    it("rejects unauthenticated request with 401", async () => {
+      const { GET } = await import("@/app/api/verification-queue/route");
+      const res = await GET(queueRequest());
+      expect(res.status).toBe(401);
+    });
+
+    it("rejects request with invalid credentials with 401", async () => {
+      const { GET } = await import("@/app/api/verification-queue/route");
+      const res = await GET(queueRequest({ auth: "Basic d3Jvbmc6d3Jvbmc=" }));
+      expect(res.status).toBe(401);
+    });
+
+    it("accepts request with valid Basic Auth (200)", async () => {
+      const { GET } = await import("@/app/api/verification-queue/route");
+      const res = await GET(queueRequest({ auth: validAuthHeader }));
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json).toHaveProperty("count");
+      expect(json).toHaveProperty("queue");
+      expect(json).toHaveProperty("contradictions");
     });
   });
 });

@@ -65,9 +65,11 @@ Free models usable through one harness (coding agent), with `freshness`.
 
 Recent `change_history` entries (moderation + verification log). `limit` / `offset` supported.
 
-## GET /api/verification-queue  (new)
+## GET /api/verification-queue  (admin, requires Basic Auth)
 
-The admin verification worklist, sorted by urgency.
+The admin verification worklist, sorted by urgency. This endpoint is protected
+by HTTP Basic Auth (same as the `/api/admin/*` collector endpoints); unauthenticated
+requests receive `401`.
 Query params: `provider`, `model`, `severity` (`all` | `critical` | `warning` | `info`).
 Each item: `{ availabilityId, modelName, providerName, accessType, status, confidence,
 freshness, dataOrigin, lastVerifiedAt, ageDays, reason, urgency }`.
