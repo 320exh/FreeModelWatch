@@ -392,13 +392,20 @@ describe("Middleware Security Boundaries", () => {
     expect(res.status).toBe(401);
   });
 
-  it("non-admin paths are not affected by middleware matcher", async () => {
-    // The middleware matcher is /admin/:path*, so it only runs for /admin* paths
-    // When we test the middleware function directly with a non-admin path,
-    // it still runs (because we're calling it directly), but in production
-    // Next.js only invokes it for matching paths.
-    // This test verifies the matcher config is correct.
+  it("middleware matcher covers admin pages and the six public read API routes", async () => {
+    // The middleware matcher runs for /admin* pages (preserving their Basic
+    // Auth) and the six verified public read API routes (rate limited), but
+    // deliberately NOT the excluded admin API endpoints (/api/verification-queue,
+    // /api/admin/*) or any other /api/* path.
     const { config } = await import("@/middleware");
-    expect(config.matcher).toEqual(["/admin/:path*"]);
+    expect(config.matcher).toEqual([
+      "/admin/:path*",
+      "/api/changes",
+      "/api/providers",
+      "/api/providers/:id/free-models",
+      "/api/models/free",
+      "/api/models/:id",
+      "/api/harnesses/:id/free-models",
+    ]);
   });
 });
