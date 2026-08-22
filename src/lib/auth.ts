@@ -55,12 +55,19 @@ export function requireAuthHeader(authHeader: string | null): string {
   return authHeader;
 }
 
-export function unauthorizedResponse(): Response {
+// `isPrefetch` suppresses the WWW-Authenticate challenge for Next.js router
+// prefetch requests: a same-origin prefetch that receives a Basic challenge
+// makes the browser pop its native sign-in dialog on public pages. Direct
+// navigations (including the admin's own login) still get the challenge.
+export function unauthorizedResponse(isPrefetch = false): Response {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (!isPrefetch) {
+    headers["WWW-Authenticate"] = 'Basic realm="FreeAI.today Admin"';
+  }
   return new Response(JSON.stringify({ error: "Unauthorized" }), {
     status: 401,
-    headers: {
-      "Content-Type": "application/json",
-      "WWW-Authenticate": 'Basic realm="FreeAI.today Admin"',
-    },
+    headers,
   });
 }

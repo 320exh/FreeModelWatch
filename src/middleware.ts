@@ -32,7 +32,12 @@ export async function middleware(request: NextRequest) {
     const authHeader = request.headers.get("authorization");
     const username = await verifyBasicAuth(authHeader);
     if (!username) {
-      return unauthorizedResponse();
+      // Router prefetches must not receive a Basic challenge — otherwise the
+      // browser shows its native sign-in dialog while a visitor is merely
+      // viewing a public page that prefetches an /admin link. Direct
+      // navigations still get the challenge and prompt normally.
+      const isPrefetch = request.headers.get("next-router-prefetch") === "1";
+      return unauthorizedResponse(isPrefetch);
     }
     const response = NextResponse.next();
     response.headers.set("x-verified-by", username);

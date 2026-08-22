@@ -13,7 +13,6 @@ const LINKS = [
   { href: "/best", label: "Best Free" },
   { href: "/changes", label: "Changes" },
   { href: "/api-docs", label: "API" },
-  { href: "/admin", label: "Admin" },
 ];
 
 export function Nav() {

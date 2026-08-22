@@ -142,6 +142,27 @@ describe("middleware", () => {
     expect(res.headers.get("WWW-Authenticate")).toBe('Basic realm="FreeAI.today Admin"');
   });
 
+  it("suppresses WWW-Authenticate on router prefetches so public pages never trigger the native sign-in dialog", async () => {
+    const res = await callMiddleware("/admin", {
+      ip: "203.0.113.7",
+      extraHeaders: { "next-router-prefetch": "1", "rsc": "1" },
+    });
+    expect(res.status).toBe(401);
+    expect(res.headers.get("WWW-Authenticate")).toBeNull();
+    expect(await res.json()).toEqual({ error: "Unauthorized" });
+  });
+
+  it("still challenges prefetch-tagged requests when valid credentials are present", async () => {
+    const validAuth = "Basic " + Buffer.from("admin:test-password").toString("base64");
+    const res = await callMiddleware("/admin", {
+      ip: "203.0.113.7",
+      authHeader: validAuth,
+      extraHeaders: { "next-router-prefetch": "1" },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-verified-by")).toBe("admin");
+  });
+
   it("preserves /admin/* authentication (accepts valid credentials)", async () => {
     const validAuth = "Basic " + Buffer.from("admin:test-password").toString("base64");
     const res = await callMiddleware("/admin/secret", { ip: "203.0.113.7", authHeader: validAuth });
