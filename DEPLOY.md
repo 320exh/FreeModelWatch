@@ -314,6 +314,18 @@ documentation/config work.
    `freeai.today`, while Google DNS (`8.8.8.8`) resolves it correctly to `161.153.82.168`. This
    is a **local resolver issue, not a production DNS failure** — authoritative/public DNS is
    working. Do not change production DNS or Cloudflare to "fix" the local resolver.
+5. **Admin auth hardening (from the 2026-08-22 security audit, see §13).** Failed Basic Auth
+   attempts on `/admin`, `/admin/*`, `/api/admin/*`, and `/api/verification-queue` are currently
+   **unlimited and unlogged** (middleware deliberately does not rate-limit admin paths; the
+   endpoint handlers perform no throttling). Add rate limiting / lockout for these surfaces as a
+   separate change.
+6. **Caddy access logging (from the 2026-08-22 audit).** Caddy currently keeps no access logs
+   (`/var/log/caddy` is empty; no `log` directive in the Caddyfile), so there is no request-level
+   forensic trail — during the 2026-08-22 review, Cloudflare zone analytics were the only source
+   of request telemetry. Enable access logging (journald is sufficient) as a separate change.
+7. **Optional credential hygiene (deferred by owner decision).** Rotate `ADMIN_PASSWORD_HASH`
+   and/or rename the `Basic realm="FreeAI.today Admin"` challenge. The 2026-08-22 audit found no
+   evidence of compromise, so the owner explicitly declined rotation during remediation.
 
 ## 11. Cloudflare API access (local credentials)
 
@@ -432,3 +444,74 @@ Opt-in, state-changing checks (not needed for a routine health check):
   bad login (401)
 
 Exit code is `0` only if no check FAILED.
+
+## 13. Incident record — unexpected public authentication prompt (2026-08-22)
+
+This section records the completed remediation of the unexpected native browser
+"Sign in" prompt on the public site, and the security audit that preceded it.
+Status: **closed** (owner-verified admin login after deploy). Follow-up hardening
+items live in §10 (items 5–7); do not re-litigate them here.
+
+### 13.1 Symptom and root cause
+
+Visiting `https://freeai.today` made the browser show its **native HTTP Basic
+sign-in dialog** before the page could be used. Cause chain, all verified:
+
+1. The site-wide navigation (`src/components/Nav.tsx`) contained an
+   `{ href: "/admin", label: "Admin" }` link, rendered on every page since the
+   initial commit (2026-08-16). The homepage additionally linked to `/admin`
+   from a stat card and several alert cards.
+2. Next.js App Router **prefetches** `<Link>` targets in the viewport. The
+   prefetch request to `/admin` hit the middleware and received
+   `401` + `WWW-Authenticate: Basic realm="FreeAI.today Admin"`
+   (`src/middleware.ts` → `src/lib/auth.ts`).
+3. A same-origin fetch that receives a Basic challenge makes the browser pop
+   the native dialog — so the prompt appeared on public pages without any user
+   interaction. Caddy and Cloudflare were ruled out (Caddyfile has no auth
+   directives; zone has zero Access apps).
+
+**Next.js 16 gotcha (important for future changes):** Next.js strips its
+internal router headers (`rsc`, `next-router-prefetch`, …) from incoming
+requests **before middleware runs**, so middleware cannot detect prefetch state
+via those headers. The working discriminator is **`Sec-Fetch-Mode`**: browser
+fetches/prefetches send `cors`/`empty`; document navigations send `navigate`;
+non-browser clients send nothing.
+
+### 13.2 Security audit verdict (read-only, 2026-08-22)
+
+- `/admin` was **properly protected** throughout: unauthenticated requests got
+  `401 {"error":"Unauthorized"}` only; the admin page never rendered. All
+  mutating server actions and admin API endpoints enforce Basic Auth (+
+  same-origin CSRF checks on the collect endpoints). No bypass exists.
+- **No evidence of unauthorized access.** Cloudflare edge analytics (Aug 18–22)
+  show routine mass-scanner noise (`/admin/.env`, `/adminfuns.php`, `phpinfo`
+  probes, …) — all rejected (401/404/301/308). `/admin` never returned 200 to
+  anyone; no POST ever succeeded on an admin endpoint; the SQLite DB contains
+  zero admin-attributed rows since launch.
+- Two authenticated **read-only** `GET`s to `/api/admin/collect/*` on
+  2026-08-20 ~04:00 UTC (last-20-runs metadata; no mutation, no secrets) were
+  attributed to operator activity (US origin, midnight local time, followed by
+  a groq CLI run that requires shell access locked to the operator IP, and
+  same-day collector-UI development artifacts). Residual uncertainty is noted
+  only because no request-level logs existed (see §10 item 6).
+- Exposure window of the *challenge* (not any data): since production launch
+  (~2026-08-17/18) until remediation (~5 days).
+
+### 13.3 Remediation (deployed at `5c4dce2`)
+
+- `src/components/Nav.tsx` — removed the `/admin` entry from the public nav.
+- `src/middleware.ts` + `src/lib/auth.ts` — on unauthenticated `/admin*`
+  requests, `WWW-Authenticate` is suppressed **only for fetch-style requests**
+  (`sec-fetch-mode` present and ≠ `navigate`); document navigations and
+  non-browser clients (curl, smoke tests) still receive the full challenge.
+  Authentication logic itself is unchanged and remains fully enforced.
+- Intermediate commit `288f4ec` (header-based prefetch detection) was superseded
+  by `5c4dce2` after live verification exposed the Next.js header-stripping
+  behavior above.
+- Tests: 337 passed (incl. 3 new regression tests). `next build` clean locally
+  and on the server. Server smoke test: 15 PASS / 0 FAIL. Owner manually
+  verified admin login with real credentials post-deploy.
+- Residual note: the homepage stat/alert cards still link to `/admin`; clicking
+  them is an in-app fetch navigation and now gets a silent 401 instead of a
+  prompt. Admin access should use a bookmarked `https://freeai.today/admin`
+  (direct navigation → normal prompt → login works).
