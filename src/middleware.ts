@@ -32,12 +32,18 @@ export async function middleware(request: NextRequest) {
     const authHeader = request.headers.get("authorization");
     const username = await verifyBasicAuth(authHeader);
     if (!username) {
-      // Router prefetches must not receive a Basic challenge — otherwise the
-      // browser shows its native sign-in dialog while a visitor is merely
-      // viewing a public page that prefetches an /admin link. Direct
-      // navigations still get the challenge and prompt normally.
-      const isPrefetch = request.headers.get("next-router-prefetch") === "1";
-      return unauthorizedResponse(isPrefetch);
+      // Only challenge real document navigations (address bar, clicked links,
+      // curl). Next.js strips its internal prefetch headers (next-router-
+      // prefetch/rsc) before middleware runs, so prefetch state is not visible
+      // here; however every fetch-style request — including Next.js router
+      // prefetches — carries Sec-Fetch-Mode != "navigate". A same-origin fetch
+      // receiving a Basic challenge makes the browser pop its native sign-in
+      // dialog while the visitor is merely viewing a public page, so those
+      // requests get a silent 401 instead. Non-browser clients (curl, smoke
+      // tests) send no Sec-Fetch headers and are still challenged.
+      const secFetchMode = request.headers.get("sec-fetch-mode");
+      const isNavigation = !secFetchMode || secFetchMode === "navigate";
+      return unauthorizedResponse(!isNavigation);
     }
     const response = NextResponse.next();
     response.headers.set("x-verified-by", username);
